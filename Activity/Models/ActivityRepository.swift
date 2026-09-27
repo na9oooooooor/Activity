@@ -28,6 +28,188 @@ final class ActivityRepository {
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
     }
+    
+    func workoutImportRange(
+        completedHistoryDays: Int = 97,
+        now: Date = .now
+    ) throws -> DateInterval {
+        let settings = try loadOrCreateSettings()
+        let calendar = makeCalendar(using: settings)
+
+        let currentDayStart = activityDayStart(
+            containing: now,
+            calendar: calendar,
+            startHour:
+                settings.activityDayStartHour
+        )
+
+        let safeHistoryDays = max(
+            1,
+            completedHistoryDays
+        )
+
+        guard let historyStart = calendar.date(
+            byAdding: .day,
+            value: -safeHistoryDays,
+            to: currentDayStart
+        ) else {
+            throw ActivityRepositoryError
+                .unableToCreateDateWindow
+        }
+
+        return DateInterval(
+            start: historyStart,
+            end: now
+        )
+    }
+    
+    func importWorkouts(
+        _ incomingWorkouts: [HealthKitWorkoutValue],
+        importedAt: Date = .now
+    ) throws -> WorkoutImportResult {
+        let storedWorkouts = try modelContext.fetch(
+            FetchDescriptor<StoredWorkout>()
+        )
+
+        var storedByUUID = Dictionary(
+            uniqueKeysWithValues:
+                storedWorkouts.map { workout in
+                    (
+                        workout.healthKitUUID,
+                        workout
+                    )
+                }
+        )
+
+        let preferences = try modelContext.fetch(
+            FetchDescriptor<WorkoutRolePreference>()
+        )
+
+        let preferenceByType = Dictionary(
+            uniqueKeysWithValues:
+                preferences.map { preference in
+                    (
+                        preference.activityTypeRawValue,
+                        preference.workoutRole
+                    )
+                }
+        )
+
+        var insertedCount = 0
+        var updatedCount = 0
+
+        for incoming in incomingWorkouts {
+            let settingsOverride =
+                preferenceByType[
+                    incoming.activityTypeRawValue
+                ]
+            let decision = WorkoutClassifier.classify(
+                activityTypeRawValue:
+                    incoming.activityTypeRawValue,
+                settingsOverride: settingsOverride
+                
+            )
+
+            if let existing =
+                storedByUUID[incoming.healthKitUUID] {
+                existing.startDate =
+                    incoming.startDate
+
+                existing.endDate =
+                    incoming.endDate
+
+                existing.activityTypeRawValue =
+                    incoming.activityTypeRawValue
+
+                existing.sourceName =
+                    incoming.sourceName
+
+                existing.sourceBundleIdentifier =
+                    incoming.sourceBundleIdentifier
+
+                existing.importedAt = importedAt
+
+                /*
+                 A direct user review wins over a future automatic
+                 re-import.
+                 */
+                if existing.workoutRoleSource
+                    != .userReview {
+                    existing.workoutRole =
+                        decision.role
+
+                    existing.workoutRoleSource =
+                        decision.source
+                }
+
+                updatedCount += 1
+            } else {
+                let stored = StoredWorkout(
+                    healthKitUUID:
+                        incoming.healthKitUUID,
+                    startDate:
+                        incoming.startDate,
+                    endDate:
+                        incoming.endDate,
+                    activityTypeRawValue:
+                        incoming.activityTypeRawValue,
+                    sourceName:
+                        incoming.sourceName,
+                    sourceBundleIdentifier:
+                        incoming.sourceBundleIdentifier,
+                    importedAt:
+                        importedAt,
+                    workoutRole:
+                        decision.role,
+                    workoutRoleSource:
+                        decision.source,
+                    moderateMinutes:
+                        nil,
+                    vigorousMinutes:
+                        nil,
+                    intensitySourceRawValue:
+                        "unknown"
+                )
+
+                modelContext.insert(stored)
+
+                storedByUUID[
+                    incoming.healthKitUUID
+                ] = stored
+
+                insertedCount += 1
+            }
+        }
+
+        try modelContext.save()
+
+        let importedUUIDs = Set(
+            incomingWorkouts.map(\.healthKitUUID)
+        )
+
+        let importedRecords = storedByUUID.values.filter {
+            importedUUIDs.contains(
+                $0.healthKitUUID
+            )
+        }
+
+        let roleReviewCount = importedRecords.filter {
+            $0.needsRoleReview
+        }.count
+
+        let intensityReviewCount =
+            importedRecords.filter {
+                $0.needsIntensityReview
+            }.count
+
+        return WorkoutImportResult(
+            insertedCount: insertedCount,
+            updatedCount: updatedCount,
+            roleReviewCount: roleReviewCount,
+            intensityReviewCount:
+                intensityReviewCount
+        )
+    }
 
     func loadDashboardInput(
         now: Date = .now
@@ -357,5 +539,100 @@ final class ActivityRepository {
             month,
             day
         )
+    }
+    
+    func setWorkoutRolePreference(
+        activityTypeRawValue: Int,
+        role: WorkoutRole?
+    ) throws {
+        var preferenceRequest =
+            FetchDescriptor<WorkoutRolePreference>(
+                predicate:
+                    #Predicate<WorkoutRolePreference> {
+                        preference in
+
+                        preference.activityTypeRawValue
+                            == activityTypeRawValue
+                    }
+            )
+
+        preferenceRequest.fetchLimit = 1
+
+        let existingPreference =
+            try modelContext
+                .fetch(preferenceRequest)
+                .first
+
+        let validOverride: WorkoutRole?
+
+        if let role,
+           role != .unknown {
+            validOverride = role
+        } else {
+            validOverride = nil
+        }
+
+        if let validOverride {
+            if let existingPreference {
+                existingPreference.workoutRole =
+                    validOverride
+            } else {
+                let newPreference =
+                    WorkoutRolePreference(
+                        activityTypeRawValue:
+                            activityTypeRawValue,
+                        workoutRole:
+                            validOverride
+                    )
+
+                modelContext.insert(newPreference)
+            }
+        } else if let existingPreference {
+
+            modelContext.delete(existingPreference)
+        }
+
+        let effectiveDecision =
+            WorkoutClassifier.classify(
+                activityTypeRawValue:
+                    activityTypeRawValue,
+                settingsOverride:
+                    validOverride
+                
+            )
+
+        let workoutRequest =
+            FetchDescriptor<StoredWorkout>(
+                predicate:
+                    #Predicate<StoredWorkout> {
+                        workout in
+
+                        workout.activityTypeRawValue
+                            == activityTypeRawValue
+                    }
+            )
+
+        let matchingWorkouts =
+            try modelContext.fetch(workoutRequest)
+
+        for workout in matchingWorkouts {
+            /*
+             Preserve a deliberate override made on one specific
+             workout.
+             */
+            guard workout.workoutRoleSource
+                != .userReview
+            else {
+                continue
+            }
+
+            workout.workoutRole =
+                effectiveDecision.role
+
+            workout.workoutRoleSource =
+                effectiveDecision.source
+        }
+
+        try modelContext.save()
     }
 }

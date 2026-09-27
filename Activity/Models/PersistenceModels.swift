@@ -7,13 +7,11 @@ import SwiftData
 
 @Model
 final class StoredWorkout {
-
     @Attribute(.unique)
     var healthKitUUID: String
 
     var startDate: Date
     var endDate: Date
-
 
     var activityTypeRawValue: Int
 
@@ -21,9 +19,20 @@ final class StoredWorkout {
     var sourceBundleIdentifier: String
     var importedAt: Date
 
+    /*
+     Examples:
+     "aerobic"
+     "strength"
+     "both"
+     "neither"
+     "unknown"
+     */
+    var workoutRoleRawValue: String =
+        WorkoutRole.unknown.rawValue
 
-    var isRecognizedStrengthWorkout: Bool
 
+    var workoutRoleSourceRawValue: String =
+        WorkoutRoleSource.unclassified.rawValue
 
     var moderateMinutes: Double?
     var vigorousMinutes: Double?
@@ -44,7 +53,9 @@ final class StoredWorkout {
         sourceName: String,
         sourceBundleIdentifier: String,
         importedAt: Date = .now,
-        isRecognizedStrengthWorkout: Bool = false,
+        workoutRole: WorkoutRole = .unknown,
+        workoutRoleSource: WorkoutRoleSource =
+            .unclassified,
         moderateMinutes: Double? = nil,
         vigorousMinutes: Double? = nil,
         intensitySourceRawValue: String = "unknown"
@@ -52,16 +63,25 @@ final class StoredWorkout {
         self.healthKitUUID = healthKitUUID
         self.startDate = startDate
         self.endDate = endDate
-        self.activityTypeRawValue = activityTypeRawValue
+        self.activityTypeRawValue =
+            activityTypeRawValue
         self.sourceName = sourceName
-        self.sourceBundleIdentifier = sourceBundleIdentifier
+        self.sourceBundleIdentifier =
+            sourceBundleIdentifier
         self.importedAt = importedAt
-        self.isRecognizedStrengthWorkout =
-            isRecognizedStrengthWorkout
+
+        self.workoutRoleRawValue =
+            workoutRole.rawValue
+
+        self.workoutRoleSourceRawValue =
+            workoutRoleSource.rawValue
+
         self.moderateMinutes =
             moderateMinutes.map { max(0, $0) }
+
         self.vigorousMinutes =
             vigorousMinutes.map { max(0, $0) }
+
         self.intensitySourceRawValue =
             intensitySourceRawValue
     }
@@ -73,13 +93,88 @@ final class StoredWorkout {
         )
     }
 
+    var workoutRole: WorkoutRole {
+        get {
+            WorkoutRole(
+                rawValue: workoutRoleRawValue
+            ) ?? .unknown
+        }
+
+        set {
+            workoutRoleRawValue = newValue.rawValue
+        }
+    }
+
+    var workoutRoleSource: WorkoutRoleSource {
+        get {
+            WorkoutRoleSource(
+                rawValue: workoutRoleSourceRawValue
+            ) ?? .unclassified
+        }
+
+        set {
+            workoutRoleSourceRawValue =
+                newValue.rawValue
+        }
+    }
+
+    var countsTowardStrength: Bool {
+        workoutRole.includesStrength
+    }
+
+    var needsRoleReview: Bool {
+        workoutRole == .unknown
+    }
+
     var needsIntensityReview: Bool {
-        moderateMinutes == nil
+        workoutRole.includesAerobic
+            && moderateMinutes == nil
             && vigorousMinutes == nil
-            && !isRecognizedStrengthWorkout
     }
 }
 
+@Model
+final class WorkoutRolePreference {
+ 
+    @Attribute(.unique)
+    var activityTypeRawValue: Int
+
+    var workoutRoleRawValue: String
+
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        activityTypeRawValue: Int,
+        workoutRole: WorkoutRole,
+        createdAt: Date = .now,
+        updatedAt: Date = .now
+    ) {
+        self.activityTypeRawValue =
+            activityTypeRawValue
+
+        self.workoutRoleRawValue =
+            workoutRole.rawValue
+
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    var workoutRole: WorkoutRole {
+        get {
+            WorkoutRole(
+                rawValue: workoutRoleRawValue
+            ) ?? .unknown
+        }
+
+        set {
+            workoutRoleRawValue =
+                newValue.rawValue
+
+            updatedAt = .now
+        }
+    }
+}
 // MARK: - Calculated daily summary
 
 @Model

@@ -10,6 +10,7 @@ struct ActivityHealthApp: App {
         .modelContainer(
             for: [
                 StoredWorkout.self,
+                WorkoutRolePreference.self,
                 DailyActivityRecord.self,
                 StoredDailyCheckIn.self,
                 AppSettings.self

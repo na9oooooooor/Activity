@@ -13,6 +13,60 @@ enum RecordState: String, Codable, Sendable {
     case unavailable
 }
 
+enum WorkoutRole:
+    String,
+    Codable,
+    Sendable,
+    Hashable
+{
+    case unknown
+    case aerobic
+    case strength
+    case both
+    case neither
+
+    static let userChoices: [WorkoutRole] = [
+        .aerobic,
+        .strength,
+        .both,
+        .neither
+    ]
+
+    var title: String {
+        switch self {
+        case .unknown:
+            return "Needs review"
+
+        case .aerobic:
+            return "Aerobic"
+
+        case .strength:
+            return "Strength"
+
+        case .both:
+            return "Aerobic and strength"
+
+        case .neither:
+            return "Neither / light activity"
+        }
+    }
+
+    var includesAerobic: Bool {
+        self == .aerobic || self == .both
+    }
+
+    var includesStrength: Bool {
+        self == .strength || self == .both
+    }
+}
+
+enum WorkoutRoleSource: String, Codable, Sendable {
+    case unclassified
+    case automatic
+    case settingsOverride
+    case userReview
+    case manualEntry
+}
 
 
 struct ActivitySnapshot: Equatable, Sendable {
@@ -137,4 +191,28 @@ struct ActivityAssessment: Equatable, Sendable {
     let aerobicTargetMet: Bool
     let strengthTargetMet: Bool
     let aboveAerobicReferenceRange: Bool
+}
+
+struct HealthKitWorkoutValue: Sendable {
+    let healthKitUUID: String
+
+    let startDate: Date
+    let endDate: Date
+
+    let activityTypeRawValue: Int
+
+    let sourceName: String
+    let sourceBundleIdentifier: String
+}
+
+struct WorkoutImportResult: Equatable, Sendable {
+    let insertedCount: Int
+    let updatedCount: Int
+
+    let roleReviewCount: Int
+    let intensityReviewCount: Int
+
+    var totalImportedCount: Int {
+        insertedCount + updatedCount
+    }
 }

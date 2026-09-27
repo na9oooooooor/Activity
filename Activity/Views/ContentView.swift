@@ -4,7 +4,9 @@ struct ContentView: View {
     @State private var selectedScenario = DemoScenario.targetsMet
     @State private var wantsRecovery = false
     @State private var reportsLowMovement = false
-
+    @State private var healthKit =
+        HealthKitService()
+    
     private var assessment: ActivityAssessment {
         ActivityRules.assess(
             snapshot: selectedScenario.snapshot,
@@ -18,6 +20,29 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Apple Health") {
+                    Text(healthKit.accessState.message)
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        Task {
+                            await healthKit.requestReadAccess()
+                        }
+                    } label: {
+                        if healthKit.accessState.isRequesting {
+                            HStack {
+                                ProgressView()
+                                Text("Requesting access…")
+                            }
+                        } else {
+                            Text("Request Apple Health access")
+                        }
+                    }
+                    .disabled(
+                        !healthKit.accessState.canRequest
+                    )
+                }
+                
                 Section("Test scenario") {
                     Picker("Scenario", selection: $selectedScenario) {
                         ForEach(DemoScenario.allCases) { scenario in
@@ -61,6 +86,14 @@ struct ContentView: View {
 
                     Text(reasonText)
                         .foregroundStyle(.secondary)
+                }
+                
+                Section("Settings") {
+                    NavigationLink {
+                        WorkoutClassificationSettingsView()
+                    } label: {
+                        Text("Workout Classifications")
+                    }
                 }
             }
             .navigationTitle("Engine Test")
