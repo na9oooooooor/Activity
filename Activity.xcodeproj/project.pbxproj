@@ -20,11 +20,22 @@
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		7039563F30693FE200825B7D /* Exceptions for "Activity" folder in "Copy Bundle Resources" phase from "Activity" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 7039562530693EE100825B7D /* Resources */;
+			membershipExceptions = (
+				Engines/ActivityRules.swift,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7039562930693EE100825B7D /* Activity */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				7039563430693EE400825B7D /* Exceptions for "Activity" folder in "Activity" target */,
+				7039563F30693FE200825B7D /* Exceptions for "Activity" folder in "Copy Bundle Resources" phase from "Activity" target */,
 			);
 			path = Activity;
 			sourceTree = "<group>";
