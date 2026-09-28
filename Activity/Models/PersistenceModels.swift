@@ -12,7 +12,7 @@ final class StoredWorkout {
 
     var startDate: Date
     var endDate: Date
-
+    var recordedDurationMinutes: Double
     var activityTypeRawValue: Int
 
     var sourceName: String
@@ -49,6 +49,7 @@ final class StoredWorkout {
         healthKitUUID: String,
         startDate: Date,
         endDate: Date,
+        recordedDurationMinutes: Double,
         activityTypeRawValue: Int,
         sourceName: String,
         sourceBundleIdentifier: String,
@@ -63,6 +64,8 @@ final class StoredWorkout {
         self.healthKitUUID = healthKitUUID
         self.startDate = startDate
         self.endDate = endDate
+        self.recordedDurationMinutes =
+            max(0, recordedDurationMinutes)
         self.activityTypeRawValue =
             activityTypeRawValue
         self.sourceName = sourceName
@@ -87,10 +90,7 @@ final class StoredWorkout {
     }
 
     var durationMinutes: Double {
-        max(
-            0,
-            endDate.timeIntervalSince(startDate) / 60
-        )
+        recordedDurationMinutes
     }
 
     var workoutRole: WorkoutRole {
@@ -263,6 +263,27 @@ final class DailyActivityRecord {
     var moderateEquivalentMinutes: Double {
         moderateMinutes + (2 * vigorousMinutes)
     }
+    var classifiedAerobicClockMinutes: Double {
+        moderateMinutes + vigorousMinutes
+    }
+
+    var supplementalAppleExerciseMinutes: Double {
+        guard let appleExerciseMinutes
+        else {
+            return 0
+        }
+
+        return max(
+            0,
+            appleExerciseMinutes
+                - classifiedAerobicClockMinutes
+        )
+    }
+
+    var guidelineModerateEquivalentMinutes: Double {
+        moderateEquivalentMinutes
+            + supplementalAppleExerciseMinutes
+    }
 
     var isStrengthDay: Bool {
         strengthWorkoutCount > 0
@@ -328,6 +349,10 @@ final class AppSettings {
 
     var createdAt: Date
     var updatedAt: Date
+    
+    var aerobicTargetMinutes: Double = 150
+    var strengthTargetDays: Int = 2
+    var usesCustomActivityTargets: Bool = false
 
     init(
         settingsID: String = "primary",
@@ -341,7 +366,10 @@ final class AppSettings {
         showStandHours: Bool = true,
         showDistance: Bool = true,
         createdAt: Date = .now,
-        updatedAt: Date = .now
+        updatedAt: Date = .now,
+        aerobicTargetMinutes: Double = 150,
+        strengthTargetDays: Int = 2,
+        usesCustomActivityTargets: Bool = false,
     ) {
         self.settingsID = settingsID
         self.hasCompletedOnboarding =
@@ -362,5 +390,32 @@ final class AppSettings {
         self.showDistance = showDistance
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.aerobicTargetMinutes = min(
+            600,
+            max(30, aerobicTargetMinutes)
+        )
+
+        self.strengthTargetDays = min(
+            7,
+            max(1, strengthTargetDays)
+        )
+
+        self.usesCustomActivityTargets =
+            usesCustomActivityTargets
+    }
+}
+extension AppSettings {
+    var activityTargets: ActivityTargets {
+        ActivityTargets(
+            aerobicMinimumMinutes:
+                aerobicTargetMinutes,
+            strengthMinimumDays:
+                strengthTargetDays,
+            aerobicAdditionalRangeMinutes:
+                max(
+                    300,
+                    aerobicTargetMinutes
+                )
+        )
     }
 }

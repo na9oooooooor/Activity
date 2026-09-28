@@ -17,6 +17,26 @@ struct ActivityRuleConfiguration: Equatable, Sendable {
     )
 }
 
+extension ActivityRuleConfiguration {
+    static func using(
+        _ targets: ActivityTargets
+    ) -> ActivityRuleConfiguration {
+        ActivityRuleConfiguration(
+            aerobicTargetMinutes:
+                targets.aerobicMinimumMinutes,
+            upperAerobicReferenceMinutes:
+                targets
+                    .aerobicAdditionalRangeMinutes,
+            strengthTargetDays:
+                targets.strengthMinimumDays,
+            workoutPromptGapMinutes:
+                30,
+            completedSessionThresholdMinutes:
+                20
+        )
+    }
+}
+
 enum ActivityRules {
     static func assess(
         snapshot: ActivitySnapshot,

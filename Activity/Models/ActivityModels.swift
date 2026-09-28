@@ -72,20 +72,11 @@ enum WorkoutRoleSource: String, Codable, Sendable {
 struct ActivitySnapshot: Equatable, Sendable {
     var moderateMinutes: Double
     var vigorousMinutes: Double
+    var supplementalAppleExerciseMinutes: Double
     var unknownIntensityMinutes: Double
 
-    /*
-     One strength day means at least one recognized strength workout
-     occurred on that calendar date.
-
-     Multiple strength workouts on the same date still count as one day.
-     */
     var strengthDays: Int
 
-    /*
-     Coverage describes whether the available records appear complete.
-     It does not describe muscle-group coverage.
-     */
     var aerobicCoverage: DataCoverage
     var strengthCoverage: DataCoverage
     var recordState: RecordState
@@ -99,6 +90,7 @@ struct ActivitySnapshot: Equatable, Sendable {
     init(
         moderateMinutes: Double = 0,
         vigorousMinutes: Double = 0,
+        supplementalAppleExerciseMinutes: Double = 0,
         unknownIntensityMinutes: Double = 0,
         strengthDays: Int = 0,
         aerobicCoverage: DataCoverage = .partial,
@@ -111,6 +103,11 @@ struct ActivitySnapshot: Equatable, Sendable {
     ) {
         self.moderateMinutes = max(0, moderateMinutes)
         self.vigorousMinutes = max(0, vigorousMinutes)
+        self.supplementalAppleExerciseMinutes =
+            max(
+                0,
+                supplementalAppleExerciseMinutes
+            )
         self.unknownIntensityMinutes =
             max(0, unknownIntensityMinutes)
 
@@ -132,7 +129,9 @@ struct ActivitySnapshot: Equatable, Sendable {
     }
 
     var moderateEquivalentMinutes: Double {
-        moderateMinutes + (2 * vigorousMinutes)
+        moderateMinutes
+            + supplementalAppleExerciseMinutes
+            + (2 * vigorousMinutes)
     }
 }
 
@@ -180,6 +179,55 @@ enum DecisionReason: String, Sendable {
     case outsideGuidedScope
 }
 
+enum WorkoutIntensityChoice:
+    String,
+    CaseIterable,
+    Identifiable,
+    Hashable,
+    Sendable
+{
+    case light
+    case moderate
+    case vigorous
+    case mixed
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .light:
+            return "Light"
+
+        case .moderate:
+            return "Moderate"
+
+        case .vigorous:
+            return "Vigorous"
+
+        case .mixed:
+            return "Mixed"
+        }
+    }
+
+    var guidance: String {
+        switch self {
+        case .light:
+            return "Comfortable breathing. Does not add aerobic target minutes."
+
+        case .moderate:
+            return "You can talk, but singing would be difficult."
+
+        case .vigorous:
+            return "You can only say a few words before pausing."
+
+        case .mixed:
+            return "The session contained both moderate and vigorous periods."
+        }
+    }
+}
+
 struct TodayRecommendation: Equatable, Sendable {
     let outcome: TodayOutcome?
     let reason: DecisionReason
@@ -193,19 +241,34 @@ struct ActivityAssessment: Equatable, Sendable {
     let aboveAerobicReferenceRange: Bool
 }
 
+struct PhysicalEffortValue: Sendable {
+    let startDate: Date
+    let endDate: Date
+    let metabolicEquivalent: Double
+}
+
 struct HealthKitWorkoutValue: Sendable {
     let healthKitUUID: String
 
     let startDate: Date
     let endDate: Date
+    let recordedDurationMinutes: Double
 
     let activityTypeRawValue: Int
 
     let sourceName: String
     let sourceBundleIdentifier: String
+
+    let physicalEffortSamples:
+        [PhysicalEffortValue]
+
+    let averageMETs: Double?
 }
 
-struct WorkoutImportResult: Equatable, Sendable {
+struct WorkoutImportResult:
+    Equatable,
+    Sendable {
+
     let insertedCount: Int
     let updatedCount: Int
 
