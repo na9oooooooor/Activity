@@ -3,12 +3,33 @@
 import Foundation
 import SwiftData
 
+struct ActivityStripDay:
+    Identifiable,
+    Sendable {
+
+    let dayStart: Date
+
+    let moderateEquivalentMinutes:
+        Double
+
+    let isStrengthDay: Bool
+    let hasData: Bool
+    let isToday: Bool
+
+    var id: Date {
+        dayStart
+    }
+}
+
 struct DashboardInput {
     let snapshot: ActivitySnapshot
     let checkIn: TodayCheckIn
 
     let comparison:
         PersonalBaselineComparison
+    
+    let activityStripDays:
+        [ActivityStripDay]
 
     let targets: ActivityTargets
 
@@ -22,26 +43,53 @@ enum ActivityRepositoryError: Error {
     case unableToCreateDateWindow
 }
 
-enum WorkoutReviewError: LocalizedError {
+
+enum ManualWorkoutError: LocalizedError {
+    case invalidActivityType
+    case invalidDuration
+    case workoutNotFinished
     case roleRequired
     case intensityRequired
-    case invalidMinutes
-    case minutesExceedWorkout
+    case invalidAerobicMinutes
+    case aerobicMinutesExceedDuration
 
     var errorDescription: String? {
         switch self {
+        case .invalidActivityType:
+            return "Choose a workout type."
+
+        case .invalidDuration:
+            return """
+            Enter a workout duration between 1 minute \
+            and 24 hours.
+            """
+
+        case .workoutNotFinished:
+            return """
+            A manual workout must finish before the \
+            current time.
+            """
+
         case .roleRequired:
-            return "Choose what this workout included."
+            return """
+            Choose whether the workout was aerobic, \
+            strength, both or neither.
+            """
 
         case .intensityRequired:
-            return "Choose the aerobic intensity."
-
-        case .invalidMinutes:
-            return "Enter a valid number of aerobic minutes."
-
-        case .minutesExceedWorkout:
             return """
-            Aerobic minutes cannot be longer than the workout.
+            Choose the aerobic intensity.
+            """
+
+        case .invalidAerobicMinutes:
+            return """
+            Enter valid aerobic minutes.
+            """
+
+        case .aerobicMinutesExceedDuration:
+            return """
+            Aerobic minutes cannot be longer than the \
+            workout duration.
             """
         }
     }
@@ -282,54 +330,28 @@ final class ActivityRepository {
                 existing.importedAt = importedAt
 
 
-                if existing.workoutRoleSource
-                    != .userReview {
-                    existing.workoutRole =
-                        decision.role
+                /*
+                 HealthKit workouts always adopt the current
+                 classification rules or the user's global
+                 workout-type setting.
 
-                    existing.workoutRoleSource =
-                        decision.source
-                }
+                 The old per-workout review system is no longer
+                 authoritative.
+                 */
+                existing.workoutRole =
+                    decision.role
 
+                existing.workoutRoleSource =
+                    decision.source
 
-                if existing.intensitySourceRawValue
-                    != "userReviewed" {
-                    let effectiveIntensity =
-                        existing.workoutRole.includesAerobic
-                        ? AutomaticIntensityClassifier
-                            .classify(
-                                workoutStart:
-                                    incoming.startDate,
-                                workoutEnd:
-                                    incoming.endDate,
-                                recordedDurationMinutes:
-                                    incoming
-                                        .recordedDurationMinutes,
-                                physicalEffort:
-                                    incoming
-                                        .physicalEffortSamples,
-                                averageMETs:
-                                    incoming.averageMETs
-                            )
-                        : AutomaticIntensityResult(
-                            moderateMinutes: nil,
-                            vigorousMinutes: nil,
-                            sourceRawValue:
-                                "notApplicable"
-                        )
+                existing.moderateMinutes =
+                    automaticIntensity.moderateMinutes
 
-                    existing.moderateMinutes =
-                        effectiveIntensity
-                            .moderateMinutes
+                existing.vigorousMinutes =
+                    automaticIntensity.vigorousMinutes
 
-                    existing.vigorousMinutes =
-                        effectiveIntensity
-                            .vigorousMinutes
-
-                    existing.intensitySourceRawValue =
-                        effectiveIntensity
-                            .sourceRawValue
-                }
+                existing.intensitySourceRawValue =
+                    automaticIntensity.sourceRawValue
 
                 updatedCount += 1
             } else {
@@ -377,31 +399,9 @@ final class ActivityRepository {
 
         try modelContext.save()
 
-        let importedUUIDs = Set(
-            incomingWorkouts.map(\.healthKitUUID)
-        )
-
-        let importedRecords = storedByUUID.values.filter {
-            importedUUIDs.contains(
-                $0.healthKitUUID
-            )
-        }
-
-        let roleReviewCount = importedRecords.filter {
-            $0.needsRoleReview
-        }.count
-
-        let intensityReviewCount =
-            importedRecords.filter {
-                $0.needsIntensityReview
-            }.count
-
         return WorkoutImportResult(
             insertedCount: insertedCount,
-            updatedCount: updatedCount,
-            roleReviewCount: roleReviewCount,
-            intensityReviewCount:
-                intensityReviewCount
+            updatedCount: updatedCount
         )
     }
 
@@ -455,6 +455,8 @@ final class ActivityRepository {
                 from: firstDayStart,
                 until: endExclusive
             )
+        
+
 
         let existingRecords =
             try fetchDailyRecords(
@@ -529,68 +531,23 @@ final class ActivityRepository {
                         )
                 }
 
-            /*
-             Only an aerobic candidate with unresolved
-             intensity contributes unknown minutes.
-             */
-            let unknownIntensityMinutes =
-                dailyWorkouts.reduce(0) {
-                    total,
-                    workout in
 
-                    guard
-                        workout
-                            .workoutRole
-                            .includesAerobic,
-                        workout.needsIntensityReview
-                    else {
-                        return total
-                    }
-
-                    return total
-                        + workout.durationMinutes
-                }
+            let unknownIntensityMinutes = 0.0
 
             let strengthWorkoutCount =
                 dailyWorkouts.filter {
                     $0.countsTowardStrength
                 }.count
 
-            /*
-             An unknown role might eventually be aerobic,
-             strength, both or neither. We cannot declare
-             either category complete yet.
-             */
-            let hasUnresolvedRole =
-                dailyWorkouts.contains {
-                    $0.needsRoleReview
-                }
-
             let previousRecord =
                 recordsByKey[dayKey]
 
-            let previousAerobicCoverage =
-                previousRecord?
-                    .aerobicCoverage
-                ?? .partial
-
-            let previousStrengthCoverage =
-                previousRecord?
-                    .strengthCoverage
-                ?? .partial
-
             let aerobicCoverage:
-                DataCoverage =
-                hasUnresolvedRole
-                || unknownIntensityMinutes > 0
-                ? .partial
-                : previousAerobicCoverage
+                DataCoverage = .confirmed
 
             let strengthCoverage:
-                DataCoverage =
-                hasUnresolvedRole
-                ? .partial
-                : previousStrengthCoverage
+                DataCoverage = .confirmed
+
 
             if let existing =
                 previousRecord {
@@ -712,6 +669,24 @@ final class ActivityRepository {
             until: tomorrowStart
         )
         
+        let stripWorkouts =
+            try fetchStoredWorkouts(
+                from: windowStart,
+                until: tomorrowStart
+            )
+
+        let activityStripDays =
+            try makeActivityStripDays(
+                records: records,
+                workouts: stripWorkouts,
+                windowStart: windowStart,
+                tomorrowStart: tomorrowStart,
+                currentDayKey: currentDayKey,
+                calendar: calendar,
+                activityDayStartHour:
+                    settings.activityDayStartHour
+            )
+        
         let comparisonRecords =
             try fetchDailyRecords(
                 from: comparisonBaselineStart,
@@ -832,6 +807,8 @@ final class ActivityRepository {
             checkIn: checkIn,
             comparison:
                 personalComparison,
+            activityStripDays:
+                   activityStripDays,
             targets:
                 settings.activityTargets,
             usesCustomActivityTargets:
@@ -1144,48 +1121,39 @@ final class ActivityRepository {
         from startDate: Date,
         until endDate: Date
     ) throws -> [StoredWorkout] {
-        let request =
-            FetchDescriptor<StoredWorkout>(
-                predicate:
-                    #Predicate<StoredWorkout> {
-                        workout in
-
-                        workout.startDate
-                            >= startDate
-                        && workout.startDate
-                            < endDate
-                    },
-                sortBy: [
-                    SortDescriptor(
-                        \StoredWorkout.startDate,
-                        order: .forward
-                    )
-                ]
+        let allWorkouts =
+            try modelContext.fetch(
+                FetchDescriptor<StoredWorkout>()
             )
 
-        return try modelContext.fetch(request)
+        return allWorkouts
+            .filter { workout in
+                workout.startDate >= startDate
+                    && workout.startDate < endDate
+            }
+            .sorted { first, second in
+                first.startDate < second.startDate
+            }
     }
 
     private func fetchDailyRecords(
         from startDate: Date,
         until endDate: Date
     ) throws -> [DailyActivityRecord] {
-        let request = FetchDescriptor<DailyActivityRecord>(
-            predicate: #Predicate<DailyActivityRecord> {
-                record in
 
+        let allRecords =
+            try modelContext.fetch(
+                FetchDescriptor<DailyActivityRecord>()
+            )
+
+        return allRecords
+            .filter { record in
                 record.dayStart >= startDate
                     && record.dayStart < endDate
-            },
-            sortBy: [
-                SortDescriptor(
-                    \DailyActivityRecord.dayStart,
-                    order: .forward
-                )
-            ]
-        )
-
-        return try modelContext.fetch(request)
+            }
+            .sorted { first, second in
+                first.dayStart < second.dayStart
+            }
     }
 
     private func fetchCheckIn(
@@ -1208,6 +1176,122 @@ final class ActivityRepository {
             .first
     }
 
+    private func makeActivityStripDays(
+        records: [DailyActivityRecord],
+        workouts: [StoredWorkout],
+        windowStart: Date,
+        tomorrowStart: Date,
+        currentDayKey: String,
+        calendar: Calendar,
+        activityDayStartHour: Int
+    ) throws -> [ActivityStripDay] {
+        let recordsByKey =
+            Dictionary(
+                uniqueKeysWithValues:
+                    records.map { record in
+                        (
+                            record.dayKey,
+                            record
+                        )
+                    }
+            )
+
+        let workoutsByKey =
+            Dictionary(
+                grouping: workouts
+            ) { workout in
+                let workoutDayStart =
+                    activityDayStart(
+                        containing:
+                            workout.startDate,
+                        calendar: calendar,
+                        startHour:
+                            activityDayStartHour
+                    )
+
+                return makeDayKey(
+                    forActivityDayStarting:
+                        workoutDayStart,
+                    calendar: calendar
+                )
+            }
+
+        var result: [ActivityStripDay] = []
+        var dayStart = windowStart
+
+        while dayStart < tomorrowStart {
+            let dayKey =
+                makeDayKey(
+                    forActivityDayStarting:
+                        dayStart,
+                    calendar: calendar
+                )
+
+            let record =
+                recordsByKey[dayKey]
+
+            let dailyWorkouts =
+                workoutsByKey[dayKey] ?? []
+
+
+            let hasMovementData =
+                record.map { record in
+                    record.recordedSteps != nil
+                        || record
+                            .appleExerciseMinutes
+                            != nil
+                        || record.standHours != nil
+                        || record
+                            .activeEnergyKilocalories
+                            != nil
+                        || record
+                            .walkingRunningDistanceMeters
+                            != nil
+                        || record
+                            .cyclingDistanceMeters
+                            != nil
+                } ?? false
+
+            let hasData =
+                hasMovementData
+                || !dailyWorkouts.isEmpty
+
+            result.append(
+                ActivityStripDay(
+                    dayStart: dayStart,
+                    moderateEquivalentMinutes:
+                        record?
+                            .guidelineModerateEquivalentMinutes
+                        ?? 0,
+                    isStrengthDay:
+                        record?.isStrengthDay
+                        ?? dailyWorkouts.contains {
+                            $0.countsTowardStrength
+                        },
+                    hasData: hasData,
+                    isToday:
+                        dayKey == currentDayKey
+                )
+            )
+            
+
+            guard let nextDay =
+                calendar.date(
+                    byAdding: .day,
+                    value: 1,
+                    to: dayStart
+                )
+            else {
+                throw ActivityRepositoryError
+                    .unableToCreateDateWindow
+            }
+
+            dayStart = nextDay
+        }
+
+        return result
+    }
+    
     private func combinedCoverage(
         _ values: [DataCoverage],
         expectedDayCount: Int
@@ -1379,22 +1463,44 @@ final class ActivityRepository {
             try modelContext.fetch(workoutRequest)
 
         for workout in matchingWorkouts {
-            /*
-             Preserve a deliberate override made on one specific
-             workout.
-             */
-            guard workout.workoutRoleSource
-                != .userReview
-            else {
-                continue
-            }
+            let previouslyIncludedAerobic =
+                workout.workoutRole
+                    .includesAerobic
 
             workout.workoutRole =
                 effectiveDecision.role
 
             workout.workoutRoleSource =
                 effectiveDecision.source
+
+            if effectiveDecision.role
+                .includesAerobic {
+                let hasUsableIntensity =
+                    workout.moderateMinutes != nil
+                    || workout.vigorousMinutes != nil
+
+                if !previouslyIncludedAerobic
+                    || !hasUsableIntensity {
+
+                    workout.moderateMinutes =
+                        workout.durationMinutes
+
+                    workout.vigorousMinutes = 0
+
+                    workout.intensitySourceRawValue =
+                        "workoutDurationConservative"
+                }
+            } else {
+
+                workout.moderateMinutes = nil
+                workout.vigorousMinutes = nil
+
+                workout.intensitySourceRawValue =
+                    "notApplicable"
+            }
         }
+
+        try modelContext.save()
 
         if
             let earliestDate =
@@ -1411,117 +1517,261 @@ final class ActivityRepository {
                 through: latestDate
             )
         }    }
+    func resetAllWorkoutRolePreferences()
+        throws {
+
+        let preferences =
+            try modelContext.fetch(
+                FetchDescriptor<
+                    WorkoutRolePreference
+                >()
+            )
+
+        for preference in preferences {
+            modelContext.delete(preference)
+        }
+
+        let workouts =
+            try modelContext.fetch(
+                FetchDescriptor<StoredWorkout>()
+            )
+
+        let importedWorkouts =
+            workouts.filter {
+                $0.workoutRoleSource
+                    != .manualEntry
+            }
+
+        for workout in importedWorkouts {
+            let previouslyIncludedAerobic =
+                workout.workoutRole
+                    .includesAerobic
+
+            let defaultDecision =
+                WorkoutClassifier.classify(
+                    activityTypeRawValue:
+                        workout.activityTypeRawValue,
+                    settingsOverride: nil
+                )
+
+            workout.workoutRole =
+                defaultDecision.role
+
+            workout.workoutRoleSource =
+                defaultDecision.source
+
+            if defaultDecision.role
+                .includesAerobic {
+
+                let hasUsableIntensity =
+                    workout.moderateMinutes != nil
+                    || workout.vigorousMinutes != nil
+
+                if !previouslyIncludedAerobic
+                    || !hasUsableIntensity {
+
+                    workout.moderateMinutes =
+                        workout.durationMinutes
+
+                    workout.vigorousMinutes = 0
+
+                    workout.intensitySourceRawValue =
+                        "workoutDurationConservative"
+                }
+            } else {
+                workout.moderateMinutes = nil
+                workout.vigorousMinutes = nil
+
+                workout.intensitySourceRawValue =
+                    "notApplicable"
+            }
+        }
+
+        try modelContext.save()
+
+        if
+            let earliestDate =
+                importedWorkouts
+                    .map(\.startDate)
+                    .min(),
+            let latestDate =
+                importedWorkouts
+                    .map(\.startDate)
+                    .max()
+        {
+            try rebuildDailyActivityRecords(
+                from: earliestDate,
+                through: latestDate
+            )
+        }
+    }
     
-    func reviewWorkout(
-        _ workout: StoredWorkout,
+    
+    @discardableResult
+    func addManualWorkout(
+        activityTypeRawValue: Int,
+        startDate: Date,
+        durationMinutes: Double,
         role: WorkoutRole,
         intensity: WorkoutIntensityChoice?,
         aerobicMinutes: Double,
         moderateMinutes: Double,
-        vigorousMinutes: Double
-    ) throws {
-        guard role != .unknown else {
-            throw WorkoutReviewError.roleRequired
+        vigorousMinutes: Double,
+        now: Date = .now
+    ) throws -> StoredWorkout {
+        guard WorkoutTypeCatalog.definition(
+            forRawValue: activityTypeRawValue
+        ) != nil else {
+            throw ManualWorkoutError
+                .invalidActivityType
         }
 
-        workout.workoutRole = role
-        workout.workoutRoleSource = .userReview
+        guard durationMinutes.isFinite,
+              durationMinutes >= 1,
+              durationMinutes <= 1_440
+        else {
+            throw ManualWorkoutError
+                .invalidDuration
+        }
 
-        guard role.includesAerobic else {
-
-            workout.moderateMinutes = nil
-            workout.vigorousMinutes = nil
-            workout.intensitySourceRawValue =
-                "notApplicable"
-
-            try modelContext.save()
-
-            try rebuildDailyActivityRecords(
-                from: workout.startDate,
-                through: workout.startDate
+        let endDate =
+            startDate.addingTimeInterval(
+                durationMinutes * 60
             )
 
-            return
-        }
-
-        guard let intensity else {
-            throw WorkoutReviewError
-                .intensityRequired
-        }
-
-        let workoutDuration =
-            workout.durationMinutes
-
-        let reviewedModerate: Double
-        let reviewedVigorous: Double
-
-        switch intensity {
-        case .light:
-
-            reviewedModerate = 0
-            reviewedVigorous = 0
-
-        case .moderate:
-            guard aerobicMinutes.isFinite,
-                  aerobicMinutes > 0
-            else {
-                throw WorkoutReviewError
-                    .invalidMinutes
-            }
-
-            reviewedModerate = aerobicMinutes
-            reviewedVigorous = 0
-
-        case .vigorous:
-            guard aerobicMinutes.isFinite,
-                  aerobicMinutes > 0
-            else {
-                throw WorkoutReviewError
-                    .invalidMinutes
-            }
-
-            reviewedModerate = 0
-            reviewedVigorous = aerobicMinutes
-
-        case .mixed:
-            guard moderateMinutes.isFinite,
-                  vigorousMinutes.isFinite,
-                  moderateMinutes >= 0,
-                  vigorousMinutes >= 0,
-                  moderateMinutes + vigorousMinutes > 0
-            else {
-                throw WorkoutReviewError
-                    .invalidMinutes
-            }
-
-            reviewedModerate = moderateMinutes
-            reviewedVigorous = vigorousMinutes
-        }
-
-        let reviewedTotal =
-            reviewedModerate + reviewedVigorous
-
-        guard reviewedTotal <= workoutDuration + 0.01
+        guard endDate <=
+            now.addingTimeInterval(60)
         else {
-            throw WorkoutReviewError
-                .minutesExceedWorkout
+            throw ManualWorkoutError
+                .workoutNotFinished
         }
 
-        workout.moderateMinutes =
-            reviewedModerate
+        guard role != .unknown else {
+            throw ManualWorkoutError
+                .roleRequired
+        }
 
-        workout.vigorousMinutes =
-            reviewedVigorous
+        let savedModerateMinutes: Double?
+        let savedVigorousMinutes: Double?
+        let intensitySource: String
 
-        workout.intensitySourceRawValue =
-            "userReviewed"
+        if role.includesAerobic {
+            guard let intensity else {
+                throw ManualWorkoutError
+                    .intensityRequired
+            }
 
+            let calculatedModerate: Double
+            let calculatedVigorous: Double
+
+            switch intensity {
+            case .light:
+                calculatedModerate = 0
+                calculatedVigorous = 0
+
+            case .moderate:
+                guard aerobicMinutes.isFinite,
+                      aerobicMinutes > 0
+                else {
+                    throw ManualWorkoutError
+                        .invalidAerobicMinutes
+                }
+
+                calculatedModerate =
+                    aerobicMinutes
+
+                calculatedVigorous = 0
+
+            case .vigorous:
+                guard aerobicMinutes.isFinite,
+                      aerobicMinutes > 0
+                else {
+                    throw ManualWorkoutError
+                        .invalidAerobicMinutes
+                }
+
+                calculatedModerate = 0
+
+                calculatedVigorous =
+                    aerobicMinutes
+
+            case .mixed:
+                guard moderateMinutes.isFinite,
+                      vigorousMinutes.isFinite,
+                      moderateMinutes >= 0,
+                      vigorousMinutes >= 0,
+                      moderateMinutes
+                        + vigorousMinutes > 0
+                else {
+                    throw ManualWorkoutError
+                        .invalidAerobicMinutes
+                }
+
+                calculatedModerate =
+                    moderateMinutes
+
+                calculatedVigorous =
+                    vigorousMinutes
+            }
+
+            guard calculatedModerate
+                    + calculatedVigorous
+                    <= durationMinutes + 0.01
+            else {
+                throw ManualWorkoutError
+                    .aerobicMinutesExceedDuration
+            }
+
+            savedModerateMinutes =
+                calculatedModerate
+
+            savedVigorousMinutes =
+                calculatedVigorous
+
+            intensitySource = "manualEntry"
+        } else {
+            savedModerateMinutes = nil
+            savedVigorousMinutes = nil
+            intensitySource = "notApplicable"
+        }
+
+        let workout = StoredWorkout(
+            healthKitUUID:
+                "manual:\(UUID().uuidString)",
+            startDate: startDate,
+            endDate: endDate,
+            recordedDurationMinutes:
+                durationMinutes,
+            activityTypeRawValue:
+                activityTypeRawValue,
+            sourceName: "Manual entry",
+            sourceBundleIdentifier:
+                "activity.manual",
+            importedAt: now,
+            workoutRole: role,
+            workoutRoleSource:
+                .manualEntry,
+            moderateMinutes:
+                savedModerateMinutes,
+            vigorousMinutes:
+                savedVigorousMinutes,
+            intensitySourceRawValue:
+                intensitySource
+        )
+
+        modelContext.insert(workout)
         try modelContext.save()
 
         try rebuildDailyActivityRecords(
-            from: workout.startDate,
-            through: workout.startDate
-        )    }
+            from: startDate,
+            through: endDate,
+            calculatedAt: now
+        )
+
+        return workout
+    }
+    
+    
     
     @discardableResult
     func updateActivityDayStartHour(

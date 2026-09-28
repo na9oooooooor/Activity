@@ -166,44 +166,65 @@ final class HealthKitService {
     private func fetchDailyMovement(
         using plan: HealthKitImportPlan
     ) async throws -> [HealthKitDailyMovementValue] {
-        let steps =
-            try await fetchDailyCumulativeTotals(
-                for: .stepCount,
-                unit: .count(),
-                using: plan
-            )
+        /*
+         Optional movement metrics must fail independently.
+         A missing stand-hours or distance permission should
+         not prevent workouts and other readable activity
+         from importing.
+         */
 
-        let exerciseMinutes =
-            try await fetchDailyCumulativeTotals(
-                for: .appleExerciseTime,
-                unit: .minute(),
-                using: plan
-            )
+        let steps: [Date: Double] =
+            (
+                try? await fetchDailyCumulativeTotals(
+                    for: .stepCount,
+                    unit: .count(),
+                    using: plan
+                )
+            ) ?? [:]
 
-        let activeEnergy =
-            try await fetchDailyCumulativeTotals(
-                for: .activeEnergyBurned,
-                unit: .kilocalorie(),
-                using: plan
-            )
+        let exerciseMinutes: [Date: Double] =
+            (
+                try? await fetchDailyCumulativeTotals(
+                    for: .appleExerciseTime,
+                    unit: .minute(),
+                    using: plan
+                )
+            ) ?? [:]
 
-        let walkingRunningDistance =
-            try await fetchDailyCumulativeTotals(
-                for: .distanceWalkingRunning,
-                unit: .meter(),
-                using: plan
-            )
+        let activeEnergy: [Date: Double] =
+            (
+                try? await fetchDailyCumulativeTotals(
+                    for: .activeEnergyBurned,
+                    unit: .kilocalorie(),
+                    using: plan
+                )
+            ) ?? [:]
 
-        let cyclingDistance =
-            try await fetchDailyCumulativeTotals(
-                for: .distanceCycling,
-                unit: .meter(),
-                using: plan
-            )
-        let standHours =
-            try await fetchDailyStandHours(
-                using: plan
-            )
+        let walkingRunningDistance:
+            [Date: Double] =
+            (
+                try? await fetchDailyCumulativeTotals(
+                    for: .distanceWalkingRunning,
+                    unit: .meter(),
+                    using: plan
+                )
+            ) ?? [:]
+
+        let cyclingDistance: [Date: Double] =
+            (
+                try? await fetchDailyCumulativeTotals(
+                    for: .distanceCycling,
+                    unit: .meter(),
+                    using: plan
+                )
+            ) ?? [:]
+
+        let standHours: [Date: Int] =
+            (
+                try? await fetchDailyStandHours(
+                    using: plan
+                )
+            ) ?? [:]
 
         var calendar =
             Calendar(identifier: .gregorian)
@@ -552,6 +573,7 @@ final class HealthKitService {
             to: plan.endDate
         )
 
+
         let workoutResult =
             try repository.importWorkouts(
                 workouts,
@@ -568,6 +590,7 @@ final class HealthKitService {
             try await fetchDailyMovement(
                 using: plan
             )
+        
 
         try repository.applyDailyMovement(
             dailyMovement,

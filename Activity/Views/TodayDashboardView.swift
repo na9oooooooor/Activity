@@ -1,8 +1,21 @@
 import SwiftUI
 
+private enum TodayDashboardSheet:
+    String,
+    Identifiable {
+
+    case today
+    case comparison
+
+    var id: String {
+        rawValue
+    }
+}
+
 struct TodayDashboardView: View {
     let input: DashboardInput
     let assessment: ActivityAssessment
+
     let todayContext:
         TodayContextSelection
 
@@ -14,26 +27,43 @@ struct TodayDashboardView: View {
     let onShowExplanation: () -> Void
     let onRefresh: () async -> Void
 
+    @State private var presentedSheet:
+        TodayDashboardSheet?
+
     var body: some View {
         ScrollView {
             VStack(
                 alignment: .leading,
-                spacing:
-                    ActivityTheme
-                        .sectionSpacing
+                spacing: 0
             ) {
                 hero
-                targetCard
-                todayCard
-                comparisonCard
+
+                ActivityDivider()
+
+                todayRow
+                    .padding(.vertical, 22)
+
+                ActivityDivider()
+
+                targetSection
+                    .padding(.vertical, 24)
+
+                ActivityDivider()
+
+                comparisonRow
+                    .padding(.vertical, 22)
+
+                ActivityDivider()
+
                 updateFooter
+                    .padding(.top, 18)
             }
             .padding(
                 .horizontal,
                 ActivityTheme.pagePadding
             )
-            .padding(.top, 12)
-            .padding(.bottom, 30)
+            .padding(.top, 22)
+            .padding(.bottom, 36)
         }
         .background(
             ActivityTheme.background
@@ -42,6 +72,27 @@ struct TodayDashboardView: View {
         .refreshable {
             await onRefresh()
         }
+        .sheet(
+            item: $presentedSheet
+        ) { sheet in
+            switch sheet {
+            case .today:
+                TodayDecisionSheet(
+                    assessment: assessment,
+                    recommendationReason:
+                        recommendationReason,
+                    todayContext:
+                        todayContext,
+                    onContextChange:
+                        onContextChange
+                )
+
+            case .comparison:
+                PersonalComparisonSheet(
+                    input: input
+                )
+            }
+        }
     }
 
     // MARK: - Hero
@@ -49,28 +100,23 @@ struct TodayDashboardView: View {
     private var hero: some View {
         VStack(
             alignment: .leading,
-            spacing: 12
+            spacing: 14
         ) {
-            HStack {
+            HStack(spacing: 8) {
                 ActivitySectionLabel(
-                    title:
-                        input
-                            .usesCustomActivityTargets
-                        ? "Your activity targets"
-                        : "Activity health"
+                    title: "Activity health"
                 )
 
-                Spacer()
-
                 Button(
-                    action:
-                        onShowExplanation
+                    action: onShowExplanation
                 ) {
                     Image(
-                        systemName:
-                            "info.circle"
+                        systemName: "info.circle"
                     )
                     .font(.body)
+                    .foregroundStyle(
+                        ActivityTheme.accent
+                    )
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(
@@ -78,6 +124,20 @@ struct TodayDashboardView: View {
                 )
             }
 
+            SevenDayActivityStrip(
+                days: input.activityStripDays,
+                aerobicTargetMinutes:
+                    input.targets
+                        .aerobicMinimumMinutes,
+                status: assessment.status,
+                recordState:
+                    input.snapshot.recordState,
+                onTap: onShowExplanation
+            )
+            .padding(.top, 2)
+            .padding(.bottom, 8)
+            
+            
             Text(statusTitle)
                 .font(
                     ActivityTheme.heroFont
@@ -86,68 +146,126 @@ struct TodayDashboardView: View {
                 .tracking(-0.8)
 
             Text(healthSummary)
-                .font(.body)
+                .font(.title3)
                 .foregroundStyle(.secondary)
                 .fixedSize(
                     horizontal: false,
                     vertical: true
                 )
-
-            if input.usesCustomActivityTargets {
-                Label(
-                    "Personal targets active",
-                    systemImage:
-                        "slider.horizontal.3"
-                )
-                .font(.caption)
-                .foregroundStyle(
-                    ActivityTheme.accent
-                )
-            }
         }
+        .padding(.bottom, 28)
+    }
+
+    // MARK: - Today
+
+    private var todayRow: some View {
+        Button {
+            presentedSheet = .today
+        } label: {
+            VStack(
+                alignment: .leading,
+                spacing: 12
+            ) {
+                ActivitySectionLabel(
+                    title: "Today"
+                )
+
+                HStack(spacing: 12) {
+                    Circle()
+                        .fill(
+                            recommendationTint
+                        )
+                        .frame(
+                            width: 9,
+                            height: 9
+                        )
+
+                    Text(recommendationTitle)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    Image(
+                        systemName: "chevron.right"
+                    )
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(
+            "Opens the recommendation explanation and today context"
+        )
     }
 
     // MARK: - Targets
 
-    private var targetCard: some View {
-        HStack(
-            alignment: .top,
-            spacing: 18
+    private var targetSection: some View {
+        VStack(
+            alignment: .leading,
+            spacing: 20
         ) {
-            targetMetric(
-                title: "Aerobic",
-                value:
-                    input.snapshot
-                        .moderateEquivalentMinutes,
-                target:
-                    input.targets
-                        .aerobicMinimumMinutes,
-                unit: "min"
-            )
-
-            Rectangle()
-                .fill(
-                    ActivityTheme.divider
+            HStack {
+                ActivitySectionLabel(
+                    title:
+                        input
+                            .usesCustomActivityTargets
+                        ? "Your 7-day targets"
+                        : "7-day targets"
                 )
-                .frame(width: 0.75)
-                .frame(maxHeight: .infinity)
 
-            targetMetric(
-                title: "Strength",
-                value:
-                    Double(
+                Spacer()
+
+                Text(activityWindowLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(
+                alignment: .top,
+                spacing: 22
+            ) {
+                targetMetric(
+                    title: "Aerobic",
+                    value:
                         input.snapshot
-                            .strengthDays
-                    ),
-                target:
-                    Double(
+                            .moderateEquivalentMinutes,
+                    target:
                         input.targets
-                            .strengthMinimumDays
-                    ),
-                unit: "days"
-            )
+                            .aerobicMinimumMinutes,
+                    unit: "min"
+                )
+
+                Rectangle()
+                    .fill(
+                        ActivityTheme.divider
+                    )
+                    .frame(
+                        width: 0.75,
+                        height: 98
+                    )
+
+                targetMetric(
+                    title: "Strength",
+                    value:
+                        Double(
+                            input.snapshot
+                                .strengthDays
+                        ),
+                    target:
+                        Double(
+                            input.targets
+                                .strengthMinimumDays
+                        ),
+                    unit: "days"
+                )
+            }
         }
-        .activityCard()
     }
 
     private func targetMetric(
@@ -158,15 +276,11 @@ struct TodayDashboardView: View {
     ) -> some View {
         VStack(
             alignment: .leading,
-            spacing: 9
+            spacing: 10
         ) {
-            Text(title)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
             HStack(
                 alignment: .firstTextBaseline,
-                spacing: 4
+                spacing: 5
             ) {
                 Text(
                     formatted(
@@ -175,8 +289,7 @@ struct TodayDashboardView: View {
                     )
                 )
                 .font(
-                    ActivityTheme
-                        .largeMetricFont
+                    ActivityTheme.largeMetricFont
                 )
                 .fontWidth(.condensed)
 
@@ -200,241 +313,108 @@ struct TodayDashboardView: View {
                     ? ActivityTheme.success
                     : ActivityTheme.accent
             )
+
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
         .frame(
             maxWidth: .infinity,
             alignment: .leading
         )
+        .accessibilityElement(
+            children: .combine
+        )
+        .accessibilityLabel(
+            """
+            \(title), \(formatted(
+                value,
+                digits: 0
+            )) of \(formatted(
+                target,
+                digits: 0
+            )) \(unit), rolling seven-day target
+            """
+        )
     }
 
-    // MARK: - Today
+    // MARK: - Personal comparison
 
-    private var todayCard: some View {
-        VStack(
-            alignment: .leading,
-            spacing: 14
-        ) {
-            HStack(
-                alignment: .firstTextBaseline
+    private var comparisonRow: some View {
+        Button {
+            presentedSheet = .comparison
+        } label: {
+            VStack(
+                alignment: .leading,
+                spacing: 10
             ) {
                 ActivitySectionLabel(
-                    title: "Today"
+                    title: "Compared with you"
                 )
 
-                Spacer()
+                HStack {
+                    Text(comparisonSummary)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
 
-                HStack(spacing: 7) {
-                    Circle()
-                        .fill(
-                            recommendationTint
-                        )
-                        .frame(
-                            width: 8,
-                            height: 8
-                        )
+                    Spacer()
 
-                    Text(
-                        assessment
-                            .recommendation
-                            .outcome?
-                            .rawValue
-                        ?? "Unavailable"
+                    Image(
+                        systemName: "chevron.right"
                     )
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundStyle(
-                        recommendationTint
-                    )
-                }
-            }
-
-            Text(
-                assessment
-                    .recommendation
-                    .outcome?
-                    .rawValue
-                ?? "Recommendation unavailable"
-            )
-            .font(.title2)
-            .fontWeight(.semibold)
-
-            Text(recommendationReason)
-                .foregroundStyle(.secondary)
-                .fixedSize(
-                    horizontal: false,
-                    vertical: true
-                )
-
-            Picker(
-                "Today’s context",
-                selection: Binding(
-                    get: {
-                        todayContext
-                    },
-                    set: {
-                        onContextChange($0)
-                    }
-                )
-            ) {
-                ForEach(
-                    TodayContextSelection
-                        .allCases
-                ) { selection in
-                    Text(selection.title)
-                        .tag(selection)
-                }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityLabel(
-                "Today’s context"
-            )
-        }
-        .activityCard()
-    }
-
-    // MARK: - Comparison
-
-    private var comparisonCard:
-        some View {
-
-        VStack(
-            alignment: .leading,
-            spacing: 14
-        ) {
-            VStack(
-                alignment: .leading,
-                spacing: 3
-            ) {
-                ActivitySectionLabel(
-                    title:
-                        "Compared with you"
-                )
-
-                Text(
-                    """
-                    Last 7 completed days versus usual
-                    """
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            comparisonRow(
-                title: "Aerobic",
-                comparison:
-                    input.comparison.aerobic,
-                unit: "min/week",
-                digits: 0
-            )
-
-            ActivityDivider()
-
-            comparisonRow(
-                title: "Steps",
-                comparison:
-                    input.comparison.steps,
-                unit: "steps/day",
-                digits: 0
-            )
-
-            ActivityDivider()
-
-            comparisonRow(
-                title: "Stand Hours",
-                comparison:
-                    input.comparison
-                        .standHours,
-                unit: "hours/day",
-                digits: 1
-            )
-
-            if let todaySteps =
-                input.snapshot
-                    .recordedStepsToday {
-
-                ActivityDivider()
-
-                LabeledContent(
-                    "Today’s movement",
-                    value:
-                        "\(todaySteps.formatted()) steps"
-                )
-            }
-        }
-        .activityCard()
-    }
-
-    @ViewBuilder
-    private func comparisonRow(
-        title: String,
-        comparison:
-            PersonalMetricComparison?,
-        unit: String,
-        digits: Int
-    ) -> some View {
-        if let comparison {
-            HStack(
-                alignment: .firstTextBaseline
-            ) {
-                VStack(
-                    alignment: .leading,
-                    spacing: 3
-                ) {
-                    Text(title)
-                        .font(.body)
-
-                    Text(
-                        """
-                        \(formatted(
-                            comparison.currentValue,
-                            digits: digits
-                        )) vs \(formatted(
-                            comparison.usualValue,
-                            digits: digits
-                        )) \(unit)
-                        """
-                    )
-                    .font(.caption)
                     .foregroundStyle(.secondary)
                 }
-
-                Spacer()
-
-                Text(
-                    changeText(
-                        comparison
-                            .percentChange
-                    )
-                )
-                .font(.headline)
             }
-        } else {
-            LabeledContent(
-                title,
-                value: "Not enough history"
-            )
-            .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityHint(
+            "Opens your personal baseline details"
+        )
     }
 
+    // MARK: - Footer
+
     private var updateFooter: some View {
-        Text(
-            """
-            Updated \(input.windowEnd.formatted(
-                date: .omitted,
-                time: .shortened
-            ))
-            """
-        )
+        HStack {
+            Text(
+                """
+                Updated \(input.windowEnd.formatted(
+                    date: .omitted,
+                    time: .shortened
+                ))
+                """
+            )
+
+            Spacer()
+
+            if input.usesCustomActivityTargets {
+                Label(
+                    "Personal targets",
+                    systemImage:
+                        "slider.horizontal.3"
+                )
+                .foregroundStyle(
+                    ActivityTheme.accent
+                )
+            }
+        }
         .font(.caption)
         .foregroundStyle(.secondary)
-        .frame(
-            maxWidth: .infinity,
-            alignment: .leading
-        )
     }
 
     // MARK: - Display values
+
+    private var recommendationTitle: String {
+        assessment
+            .recommendation
+            .outcome?
+            .rawValue
+        ?? "Recommendation unavailable"
+    }
 
     private var statusTitle: String {
         switch assessment.status {
@@ -443,9 +423,6 @@ struct TodayDashboardView: View {
 
         case .belowTargets:
             return "Room to build"
-
-        case .needsReview:
-            return "Needs review"
 
         case .updating:
             return "Updating"
@@ -460,8 +437,7 @@ struct TodayDashboardView: View {
             && assessment.strengthTargetMet {
 
             return """
-            Your aerobic and strength targets are reached \
-            in the current seven-day window.
+            Your aerobic and strength targets are reached.
             """
         }
 
@@ -483,6 +459,61 @@ struct TodayDashboardView: View {
         Aerobic activity and strength frequency remain \
         below your current targets.
         """
+    }
+
+    private var comparisonSummary: String {
+        guard let aerobic =
+            input.comparison.aerobic
+        else {
+            return "Building your baseline"
+        }
+
+        return """
+        \(changeText(
+            aerobic.percentChange
+        )) aerobic activity
+        """
+    }
+
+    private var activityWindowLabel: String {
+        let calendar = Calendar.current
+
+        let startComponents =
+            calendar.dateComponents(
+                [.year, .month],
+                from: input.windowStart
+            )
+
+        let endComponents =
+            calendar.dateComponents(
+                [.year, .month],
+                from: input.windowEnd
+            )
+
+        let start =
+            input.windowStart.formatted(
+                .dateTime
+                    .month(.abbreviated)
+                    .day()
+            )
+
+        if startComponents == endComponents {
+            let endDay =
+                input.windowEnd.formatted(
+                    .dateTime.day()
+                )
+
+            return "\(start)–\(endDay)"
+        }
+
+        let end =
+            input.windowEnd.formatted(
+                .dateTime
+                    .month(.abbreviated)
+                    .day()
+            )
+
+        return "\(start)–\(end)"
     }
 
     private var recommendationTint: Color {
@@ -522,7 +553,336 @@ struct TodayDashboardView: View {
         _ percentage: Double?
     ) -> String {
         guard let percentage else {
-            return "—"
+            return "Usual"
+        }
+
+        if abs(percentage) < 0.5 {
+            return "Usual"
+        }
+
+        let arrow =
+            percentage > 0 ? "↑" : "↓"
+
+        let amount =
+            abs(percentage).formatted(
+                .number.precision(
+                    .fractionLength(0)
+                )
+            )
+
+        return "\(arrow) \(amount)%"
+    }
+}
+
+// MARK: - Today details
+
+private struct TodayDecisionSheet: View {
+    let assessment: ActivityAssessment
+    let recommendationReason: String
+
+    let todayContext:
+        TodayContextSelection
+
+    let onContextChange:
+        (TodayContextSelection) -> Void
+
+    @Environment(\.dismiss)
+    private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(
+                    alignment: .leading,
+                    spacing: 22
+                ) {
+                    ActivitySectionLabel(
+                        title: "Today"
+                    )
+
+                    Text(recommendationTitle)
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .fontWidth(.condensed)
+
+                    Text(recommendationReason)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(
+                            horizontal: false,
+                            vertical: true
+                        )
+
+                    ActivityDivider()
+
+                    VStack(
+                        alignment: .leading,
+                        spacing: 12
+                    ) {
+                        Text("How today feels")
+                            .font(.headline)
+
+                        Text(
+                            """
+                            Choose a different context when \
+                            you need recovery or have moved \
+                            very little today.
+                            """
+                        )
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                        Picker(
+                            "Today’s context",
+                            selection: Binding(
+                                get: {
+                                    todayContext
+                                },
+                                set: {
+                                    onContextChange($0)
+                                }
+                            )
+                        ) {
+                            ForEach(
+                                TodayContextSelection
+                                    .allCases
+                            ) { selection in
+                                Text(selection.title)
+                                    .tag(selection)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    Text(
+                        """
+                        This changes today’s recommendation. \
+                        It does not change your imported \
+                        workouts or activity targets.
+                        """
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(
+                    ActivityTheme.pagePadding
+                )
+            }
+            .background(
+                ActivityTheme.background
+                    .ignoresSafeArea()
+            )
+            .navigationTitle(
+                "Today"
+            )
+            .navigationBarTitleDisplayMode(
+                .inline
+            )
+            .toolbar {
+                ToolbarItem(
+                    placement: .confirmationAction
+                ) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents(
+            [.medium, .large]
+        )
+    }
+
+    private var recommendationTitle: String {
+        assessment
+            .recommendation
+            .outcome?
+            .rawValue
+        ?? "Recommendation unavailable"
+    }
+}
+
+// MARK: - Comparison details
+
+private struct PersonalComparisonSheet: View {
+    let input: DashboardInput
+
+    @Environment(\.dismiss)
+    private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(
+                    alignment: .leading,
+                    spacing: 22
+                ) {
+                    ActivitySectionLabel(
+                        title: "Compared with you"
+                    )
+
+                    Text("Your recent pattern")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .fontWidth(.condensed)
+
+                    Text(
+                        """
+                        Your last 7 completed days are \
+                        compared with the previous 90 \
+                        completed days. Today is excluded.
+                        """
+                    )
+                    .foregroundStyle(.secondary)
+
+                    ActivityDivider()
+
+                    comparisonMetric(
+                        title: "Aerobic",
+                        comparison:
+                            input.comparison.aerobic,
+                        unit: "min/week",
+                        digits: 0
+                    )
+
+                    ActivityDivider()
+
+                    comparisonMetric(
+                        title: "Steps",
+                        comparison:
+                            input.comparison.steps,
+                        unit: "steps/day",
+                        digits: 0
+                    )
+
+                    ActivityDivider()
+
+                    comparisonMetric(
+                        title: "Stand hours",
+                        comparison:
+                            input.comparison
+                                .standHours,
+                        unit: "hours/day",
+                        digits: 1
+                    )
+
+                    if let todaySteps =
+                        input.snapshot
+                            .recordedStepsToday {
+
+                        ActivityDivider()
+
+                        HStack {
+                            Text("Today’s movement")
+
+                            Spacer()
+
+                            Text(
+                                "\(todaySteps.formatted()) steps"
+                            )
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(
+                    ActivityTheme.pagePadding
+                )
+            }
+            .background(
+                ActivityTheme.background
+                    .ignoresSafeArea()
+            )
+            .navigationTitle(
+                "Your baseline"
+            )
+            .navigationBarTitleDisplayMode(
+                .inline
+            )
+            .toolbar {
+                ToolbarItem(
+                    placement: .confirmationAction
+                ) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents(
+            [.medium, .large]
+        )
+    }
+
+    @ViewBuilder
+    private func comparisonMetric(
+        title: String,
+        comparison:
+            PersonalMetricComparison?,
+        unit: String,
+        digits: Int
+    ) -> some View {
+        if let comparison {
+            VStack(
+                alignment: .leading,
+                spacing: 8
+            ) {
+                HStack {
+                    Text(title)
+                        .font(.headline)
+
+                    Spacer()
+
+                    Text(
+                        changeText(
+                            comparison.percentChange
+                        )
+                    )
+                    .font(.headline)
+                }
+
+                Text(
+                    """
+                    \(formatted(
+                        comparison.currentValue,
+                        digits: digits
+                    )) vs usual \(formatted(
+                        comparison.usualValue,
+                        digits: digits
+                    )) \(unit)
+                    """
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+        } else {
+            HStack {
+                Text(title)
+                    .font(.headline)
+
+                Spacer()
+
+                Text("Not enough history")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func formatted(
+        _ value: Double,
+        digits: Int
+    ) -> String {
+        value.formatted(
+            .number.precision(
+                .fractionLength(digits)
+            )
+        )
+    }
+
+    private func changeText(
+        _ percentage: Double?
+    ) -> String {
+        guard let percentage else {
+            return "Usual"
         }
 
         if abs(percentage) < 0.5 {

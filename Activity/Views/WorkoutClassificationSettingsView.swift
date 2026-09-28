@@ -3,6 +3,7 @@ import SwiftData
 
 struct WorkoutClassificationSettingsView: View {
     @Environment(\.modelContext)
+    
     private var modelContext
 
     @Query(
@@ -16,10 +17,21 @@ struct WorkoutClassificationSettingsView: View {
     @Query
     private var storedWorkouts:
         [StoredWorkout]
+    
+    let onChange: () -> Void
+
+    init(
+        onChange:
+            @escaping () -> Void = {}
+    ) {
+        self.onChange = onChange
+    }
 
     @State private var searchText = ""
     @State private var errorMessage: String?
     @State private var isShowingError = false
+    @State private var
+        isShowingResetConfirmation = false
 
     private var recordedTypeValues: Set<Int> {
         Set(
@@ -98,6 +110,24 @@ struct WorkoutClassificationSettingsView: View {
                     )
                 }
             }
+            
+            Section {
+                Button(
+                    "Reset All to App Defaults",
+                    role: .destructive
+                ) {
+                    isShowingResetConfirmation =
+                        true
+                }
+                .disabled(preferences.isEmpty)
+            } footer: {
+                Text(
+                    """
+                    Removes all workout-type overrides and restores \
+                    the classifications supplied by the app.
+                    """
+                )
+            }
 
             Section {
                 Text(
@@ -117,6 +147,33 @@ struct WorkoutClassificationSettingsView: View {
             text: $searchText,
             prompt: "Search workouts"
         )
+        
+        .confirmationDialog(
+            "Reset all workout types?",
+            isPresented:
+                $isShowingResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(
+                "Reset All",
+                role: .destructive
+            ) {
+                resetAllPreferences()
+            }
+
+            Button(
+                "Cancel",
+                role: .cancel
+            ) {}
+        } message: {
+            Text(
+                """
+                Every workout type will return to the \
+                classification supplied by the app.
+                """
+            )
+        }
+        
         .alert(
             "Couldn’t Save",
             isPresented: $isShowingError
@@ -223,7 +280,7 @@ struct WorkoutClassificationSettingsView: View {
         )
 
         let effectiveRole =
-            preference?.workoutRole ?? .unknown
+            preference?.workoutRole ?? .neither
 
         Menu {
             Button {
@@ -233,7 +290,7 @@ struct WorkoutClassificationSettingsView: View {
                 )
             } label: {
                 menuLabel(
-                    title: "Keep for Review",
+                    title: "Use Default (Not counted)",
                     selected: preference == nil
                 )
             }
@@ -340,6 +397,27 @@ struct WorkoutClassificationSettingsView: View {
                         activityTypeRawValue,
                     role: role
                 )
+
+            onChange()
+        } catch {
+            errorMessage =
+                error.localizedDescription
+
+            isShowingError = true
+        }
+    }
+    
+    private func resetAllPreferences() {
+        do {
+            let repository =
+                ActivityRepository(
+                    modelContext: modelContext
+                )
+
+            try repository
+                .resetAllWorkoutRolePreferences()
+
+            onChange()
         } catch {
             errorMessage =
                 error.localizedDescription

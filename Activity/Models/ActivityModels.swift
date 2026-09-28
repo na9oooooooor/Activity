@@ -148,12 +148,21 @@ struct TodayCheckIn: Equatable, Sendable {
     }
 }
 
-enum ActivityHealthStatus: String, Sendable {
-    case meetingTargets = "Meeting the core activity targets"
-    case belowTargets = "Room to build your activity"
-    case needsReview = "More information needed"
-    case updating = "Updating activity"
-    case unavailable = "No accessible activity data"
+enum ActivityHealthStatus:
+    String,
+    Sendable {
+
+    case meetingTargets =
+        "Meeting the core activity targets"
+
+    case belowTargets =
+        "Room to build your activity"
+
+    case updating =
+        "Updating activity"
+
+    case unavailable =
+        "No accessible activity data"
 }
 
 enum TodayOutcome: String, Sendable {
@@ -172,7 +181,6 @@ enum DecisionReason: String, Sendable {
     case aerobicSessionAlreadyCompleted
     case lowMovement
     case recoveryChoice
-    case incompleteRecords
     case unavailableRecords
     case staleRecords
     case importing
@@ -271,9 +279,6 @@ struct WorkoutImportResult:
 
     let insertedCount: Int
     let updatedCount: Int
-
-    let roleReviewCount: Int
-    let intensityReviewCount: Int
 
     var totalImportedCount: Int {
         insertedCount + updatedCount

@@ -18,16 +18,6 @@ struct ContentView: View {
     @Environment(\.modelContext)
     private var modelContext
 
-    @Query
-    private var storedWorkouts:
-        [StoredWorkout]
-
-    private var workoutReviewCount: Int {
-        storedWorkouts.filter { workout in
-            workout.needsRoleReview
-                || workout.needsIntensityReview
-        }.count
-    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -560,10 +550,26 @@ struct ContentView: View {
                         )
                     }
                 }
-
+                NavigationLink {
+                    ManualWorkoutEntryView {
+                        dashboard.loadStoredData(
+                            modelContext: modelContext
+                        )
+                    }
+                } label: {
+                    Label(
+                        "Add Workout",
+                        systemImage: "plus.circle"
+                    )
+                }
+                
                 Section("Workouts") {
                     NavigationLink {
-                        WorkoutClassificationSettingsView()
+                        WorkoutClassificationSettingsView {
+                            dashboard.loadStoredData(
+                                modelContext: modelContext
+                            )
+                        }
                     } label: {
                         Label(
                             "Workout Classifications",
@@ -572,21 +578,6 @@ struct ContentView: View {
                         )
                     }
 
-                    NavigationLink {
-                        WorkoutReviewListView()
-                    } label: {
-                        LabeledContent {
-                            Text(
-                                "\(workoutReviewCount)"
-                            )
-                        } label: {
-                            Label(
-                                "Workouts to Review",
-                                systemImage:
-                                    "checklist"
-                            )
-                        }
-                    }
                 }
 
                 Section("About") {
@@ -738,8 +729,8 @@ struct ContentView: View {
 
         case .strengthGap:
             return """
-            Fewer than two strength-training days are \
-            recorded.
+            Your recorded strength days remain below your \
+            current target.
             """
 
         case .smallRemainingGap:
@@ -770,12 +761,6 @@ struct ContentView: View {
             return """
             You selected a recovery day. Light movement \
             is enough if it feels appropriate.
-            """
-
-        case .incompleteRecords:
-            return """
-            Some workouts need review before the app can \
-            make a complete suggestion.
             """
 
         case .unavailableRecords:

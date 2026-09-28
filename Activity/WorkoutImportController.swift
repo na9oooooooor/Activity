@@ -28,25 +28,9 @@ enum WorkoutImportState: Equatable {
                 """
             }
 
-            var parts = [
-                "\(result.totalImportedCount) workouts imported"
-            ]
-
-            if result.roleReviewCount > 0 {
-                parts.append(
-                    "\(result.roleReviewCount) need classification"
-                )
-            }
-
-            if result.intensityReviewCount > 0 {
-                parts.append(
-                    "\(result.intensityReviewCount) need intensity review"
-                )
-            }
-
-            return parts.joined(
-                separator: " · "
-            )
+            return """
+            \(result.totalImportedCount) workouts imported
+            """
 
         case .failed(let message):
             return "Import failed: \(message)"

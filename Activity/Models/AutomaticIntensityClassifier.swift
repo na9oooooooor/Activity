@@ -33,10 +33,31 @@ enum AutomaticIntensityClassifier {
             return effortResult
         }
 
-        return classifyAverageMETs(
-            averageMETs,
-            durationMinutes:
-                recordedDurationMinutes
+        let averageResult =
+            classifyAverageMETs(
+                averageMETs,
+                durationMinutes:
+                    recordedDurationMinutes
+            )
+
+        if averageResult.moderateMinutes != nil
+            || averageResult.vigorousMinutes != nil {
+
+            return averageResult
+        }
+
+        guard recordedDurationMinutes.isFinite,
+              recordedDurationMinutes > 0
+        else {
+            return .unavailable
+        }
+
+        return AutomaticIntensityResult(
+            moderateMinutes:
+                recordedDurationMinutes,
+            vigorousMinutes: 0,
+            sourceRawValue:
+                "workoutDurationConservative"
         )
     }
 

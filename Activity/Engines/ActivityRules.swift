@@ -53,21 +53,6 @@ enum ActivityRules {
 
         let targetsMet = aerobicTargetMet && strengthTargetMet
 
-
-        let aerobicCanBeAssessed =
-            aerobicTargetMet
-            || (
-                snapshot.aerobicCoverage == .confirmed
-                && snapshot.unknownIntensityMinutes == 0
-            )
-
-        let strengthCanBeAssessed =
-            strengthTargetMet
-            || snapshot.strengthCoverage == .confirmed
-
-        let recordsCanBeAssessed =
-            aerobicCanBeAssessed && strengthCanBeAssessed
-
         let status: ActivityHealthStatus
 
         switch snapshot.recordState {
@@ -81,13 +66,10 @@ enum ActivityRules {
             status = .unavailable
 
         case .current:
-            if targetsMet {
-                status = .meetingTargets
-            } else if recordsCanBeAssessed {
-                status = .belowTargets
-            } else {
-                status = .needsReview
-            }
+            status =
+                targetsMet
+                ? .meetingTargets
+                : .belowTargets
         }
 
         let recommendation = makeTodayRecommendation(
@@ -96,7 +78,6 @@ enum ActivityRules {
             targetsMet: targetsMet,
             aerobicTargetMet: aerobicTargetMet,
             strengthTargetMet: strengthTargetMet,
-            recordsCanBeAssessed: recordsCanBeAssessed,
             configuration: configuration
         )
 
@@ -118,7 +99,6 @@ enum ActivityRules {
         targetsMet: Bool,
         aerobicTargetMet: Bool,
         strengthTargetMet: Bool,
-        recordsCanBeAssessed: Bool,
         configuration: ActivityRuleConfiguration
     ) -> TodayRecommendation {
         guard snapshot.isInsideGuidedScope else {
@@ -149,13 +129,6 @@ enum ActivityRules {
 
         case .current:
             break
-        }
-
-        guard recordsCanBeAssessed else {
-            return TodayRecommendation(
-                outcome: nil,
-                reason: .incompleteRecords
-            )
         }
 
         if checkIn.wantsRecovery {

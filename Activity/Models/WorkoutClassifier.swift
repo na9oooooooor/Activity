@@ -30,9 +30,10 @@ enum WorkoutClassifier {
         guard WorkoutTypeCatalog.definition(
             forRawValue: activityTypeRawValue
         ) != nil else {
+
             return WorkoutRoleDecision(
-                role: .unknown,
-                source: .unclassified
+                role: .neither,
+                source: .automatic
             )
         }
 

@@ -104,23 +104,6 @@ struct ActivityExplanationView: View {
             .font(.footnote)
             .foregroundStyle(.secondary)
 
-            if input.snapshot
-                .unknownIntensityMinutes > 0 {
-
-                Label(
-                    """
-                    \(formatted(
-                        input.snapshot
-                            .unknownIntensityMinutes
-                    )) workout minutes still need \
-                    intensity review.
-                    """,
-                    systemImage:
-                        "questionmark.circle"
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            }
         }
     }
 
@@ -250,15 +233,23 @@ struct ActivityExplanationView: View {
 
         Section("Reference used") {
             LabeledContent(
-                "Aerobic target",
+                "Aerobic · last 7 days",
                 value:
-                    "\(formatted(input.targets.aerobicMinimumMinutes)) min / 7 days"
+                    """
+                    \(formatted(
+                        input.targets
+                            .aerobicMinimumMinutes
+                    )) min
+                    """
             )
 
             LabeledContent(
-                "Strength target",
+                "Strength · last 7 days",
                 value:
-                    "\(input.targets.strengthMinimumDays) days / 7 days"
+                    """
+                    \(input.targets
+                        .strengthMinimumDays) days
+                    """
             )
             if input.usesCustomActivityTargets {
                 Label(

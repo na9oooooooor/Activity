@@ -154,11 +154,6 @@ final class DashboardController {
                 now: now
             )
 
-            /*
-             Reloading is inexpensive because it reads the
-             local daily summaries. It does not query
-             HealthKit again.
-             */
             let loadedInput =
                 try repository.loadDashboardInput(
                     now: now
@@ -198,6 +193,7 @@ final class DashboardController {
         } else if loadedInput
             .checkIn
             .reportsLowMovement {
+
             todayContext = .lowMovement
         } else {
             todayContext = .normal
