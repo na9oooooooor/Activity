@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import HealthKit
 
 struct ManualWorkoutEntryView: View {
     @Environment(\.dismiss)
@@ -12,11 +13,10 @@ struct ManualWorkoutEntryView: View {
     private var rolePreferences:
         [WorkoutRolePreference]
 
-    let onSaved: () -> Void
-
     @State private var selectedActivityTypeRawValue:
         Int?
-
+    @State private var isSaving = false
+    
     @State private var startDate =
         Date.now.addingTimeInterval(-30 * 60)
 
@@ -34,6 +34,9 @@ struct ManualWorkoutEntryView: View {
 
     @State private var showingError = false
 
+    let healthKit: HealthKitService
+    let onSaved: () -> Void
+    
     private var selectedDefinition:
         WorkoutTypeDefinition? {
 
@@ -212,14 +215,19 @@ struct ManualWorkoutEntryView: View {
     private var saveSection: some View {
         Section {
             Button {
-                saveWorkout()
+                Task {
+                    await saveWorkout()
+                }
             } label: {
-                Text("Add Workout")
-                    .frame(
-                        maxWidth: .infinity
-                    )
+                if isSaving {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Text("Add Workout")
+                        .frame(maxWidth: .infinity)
+                }
             }
-            .disabled(!canSave)
+            .disabled(!canSave || isSaving)
         } footer: {
             if workoutEndDate > Date.now {
                 Text(
@@ -265,20 +273,48 @@ struct ManualWorkoutEntryView: View {
             ?? .neither
     }
 
-    private func saveWorkout() {
+    @MainActor
+    private func saveWorkout() async {
         guard let selectedDefinition else {
             return
+        }
+
+        isSaving = true
+        defer {
+            isSaving = false
         }
 
         let values = aerobicValues()
 
         do {
+            let healthWorkout =
+                try await healthKit
+                    .saveManualWorkout(
+                        activityTypeRawValue:
+                            selectedDefinition
+                                .activityTypeRawValue,
+                        startDate: startDate,
+                        durationMinutes:
+                            Double(durationMinutes),
+                        role: role,
+                        intensity:
+                            role.includesAerobic
+                                ? intensity
+                                : nil,
+                        moderateMinutes:
+                            values.moderate,
+                        vigorousMinutes:
+                            values.vigorous
+                    )
+
             let repository =
                 ActivityRepository(
                     modelContext: modelContext
                 )
 
             try repository.addManualWorkout(
+                healthKitUUID:
+                    healthWorkout.uuid.uuidString,
                 activityTypeRawValue:
                     selectedDefinition
                         .activityTypeRawValue,

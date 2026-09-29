@@ -2,6 +2,52 @@ import Foundation
 import HealthKit
 import Observation
 
+private enum ManualWorkoutMetadataKey {
+    static let role =
+        "com.nas.Activity.manualWorkout.role"
+
+    static let intensity =
+        "com.nas.Activity.manualWorkout.intensity"
+
+    static let moderateMinutes =
+        "com.nas.Activity.manualWorkout.moderateMinutes"
+
+    static let vigorousMinutes =
+        "com.nas.Activity.manualWorkout.vigorousMinutes"
+}
+
+enum HealthKitWriteError: LocalizedError {
+    case invalidActivityType
+    case workoutWriteDenied
+    case workoutUnavailableAfterSaving
+    case workoutDeleteFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidActivityType:
+            return "This workout type cannot be saved."
+
+        case .workoutWriteDenied:
+            return """
+            Activity Health does not have permission to save \
+            workouts to Apple Health. You can change this in \
+            the Health app.
+            """
+
+        case .workoutUnavailableAfterSaving:
+            return """
+            Apple Health saved the workout, but it could not \
+            return the saved record.
+            """
+            
+        case .workoutDeleteFailed:
+            return """
+            The workout could not be deleted from Apple Health.
+            """
+        }
+    }
+}
+
 enum HealthKitAccessState: Equatable {
     case unavailable
     case checking
@@ -128,7 +174,7 @@ final class HealthKitService {
                 accessState = .requesting
 
                 try await healthStore.requestAuthorization(
-                    toShare: [],
+                    toShare: shareTypes,
                     read: readTypes
                 )
 
@@ -540,7 +586,7 @@ final class HealthKitService {
             continuation in
 
             healthStore.getRequestStatusForAuthorization(
-                toShare: Set<HKSampleType>(),
+                toShare: shareTypes,
                 read: readTypes
             ) { status, error in
                 if let error {
@@ -558,7 +604,129 @@ final class HealthKitService {
         }
     }
     
+    func saveManualWorkout(
+        activityTypeRawValue: Int,
+        startDate: Date,
+        durationMinutes: Double,
+        role: WorkoutRole,
+        intensity: WorkoutIntensityChoice?,
+        moderateMinutes: Double,
+        vigorousMinutes: Double
+    ) async throws -> HKWorkout {
+        guard
+            let rawValue = UInt(
+                exactly: activityTypeRawValue
+            ),
+            let activityType =
+                HKWorkoutActivityType(
+                    rawValue: rawValue
+                )
+        else {
+            throw HealthKitWriteError
+                .invalidActivityType
+        }
 
+        try await ensureWorkoutWriteAccess()
+
+        let endDate =
+            startDate.addingTimeInterval(
+                durationMinutes * 60
+            )
+
+        let configuration =
+            HKWorkoutConfiguration()
+
+        configuration.activityType =
+            activityType
+
+        configuration.locationType =
+            .unknown
+
+        let builder =
+            HKWorkoutBuilder(
+                healthStore: healthStore,
+                configuration: configuration,
+                device: .local()
+            )
+
+        try await builder.beginCollection(
+            at: startDate
+        )
+
+        var metadata: [String: Any] = [
+            HKMetadataKeyWasUserEntered: true,
+            HKMetadataKeyTimeZone:
+                TimeZone.current.identifier,
+            HKMetadataKeyExternalUUID:
+                UUID().uuidString,
+            ManualWorkoutMetadataKey.role:
+                role.rawValue,
+            ManualWorkoutMetadataKey
+                .moderateMinutes:
+                moderateMinutes,
+            ManualWorkoutMetadataKey
+                .vigorousMinutes:
+                vigorousMinutes
+        ]
+
+        if let intensity {
+            metadata[
+                ManualWorkoutMetadataKey.intensity
+            ] = intensity.rawValue
+        }
+
+        try await builder.addMetadata(metadata)
+
+        try await builder.endCollection(
+            at: endDate
+        )
+
+        guard let workout =
+            try await builder.finishWorkout()
+        else {
+            throw HealthKitWriteError
+                .workoutUnavailableAfterSaving
+        }
+
+        return workout
+    }
+
+    private func ensureWorkoutWriteAccess()
+        async throws {
+
+        let workoutType =
+            HKObjectType.workoutType()
+
+        switch healthStore.authorizationStatus(
+            for: workoutType
+        ) {
+        case .sharingAuthorized:
+            return
+
+        case .notDetermined:
+            try await healthStore
+                .requestAuthorization(
+                    toShare: shareTypes,
+                    read: readTypes
+                )
+
+            guard healthStore.authorizationStatus(
+                for: workoutType
+            ) == .sharingAuthorized
+            else {
+                throw HealthKitWriteError
+                    .workoutWriteDenied
+            }
+
+        case .sharingDenied:
+            throw HealthKitWriteError
+                .workoutWriteDenied
+
+        @unknown default:
+            throw HealthKitWriteError
+                .workoutWriteDenied
+        }
+    }
     
     func importHealthData(
         using repository: ActivityRepository,
@@ -597,6 +765,60 @@ final class HealthKitService {
             calculatedAt: now
         )
         return workoutResult
+    }
+    
+    func deleteManualWorkout(
+        healthKitUUID: String
+    ) async throws {
+
+        guard let uuid =
+            UUID(uuidString: healthKitUUID)
+        else {
+            return
+        }
+
+        try await ensureWorkoutWriteAccess()
+
+        let predicate =
+            HKQuery.predicateForObject(
+                with: uuid
+            )
+
+        try await withCheckedThrowingContinuation {
+            (
+                continuation:
+                    CheckedContinuation<Void, Error>
+            ) in
+
+            healthStore.deleteObjects(
+                of: HKObjectType.workoutType(),
+                predicate: predicate
+            ) {
+                success,
+                _,
+                error in
+
+                if let error {
+                    continuation.resume(
+                        throwing: error
+                    )
+
+                    return
+                }
+
+                guard success else {
+                    continuation.resume(
+                        throwing:
+                            HealthKitWriteError
+                                .workoutDeleteFailed
+                    )
+
+                    return
+                }
+
+                continuation.resume()
+            }
+        }
     }
     
     func fetchWorkouts(
@@ -671,7 +893,21 @@ final class HealthKitService {
                     physicalEffortSamples:
                         effortSamples,
                     averageMETs:
-                        averageMETs
+                        averageMETs,
+                    manualRole:
+                        manualRole(from: workout),
+                    manualModerateMinutes:
+                        manualMinutes(
+                            ManualWorkoutMetadataKey
+                                .moderateMinutes,
+                            from: workout
+                        ),
+                    manualVigorousMinutes:
+                        manualMinutes(
+                            ManualWorkoutMetadataKey
+                                .vigorousMinutes,
+                            from: workout
+                        )
                 )
             )
         }
@@ -691,6 +927,12 @@ final class HealthKitService {
             HKQuantityType(.distanceCycling),
 
             HKCategoryType(.appleStandHour)
+        ]
+    }
+    
+    private var shareTypes: Set<HKSampleType> {
+        [
+            HKObjectType.workoutType()
         ]
     }
     
@@ -773,7 +1015,44 @@ final class HealthKitService {
         }
     }
     
-    
+    private func manualRole(
+        from workout: HKWorkout
+    ) -> WorkoutRole? {
+        guard
+            let rawValue =
+                workout.metadata?[
+                    ManualWorkoutMetadataKey.role
+                ] as? String,
+            let role =
+                WorkoutRole(rawValue: rawValue),
+            role != .unknown
+        else {
+            return nil
+        }
+
+        return role
+    }
+
+    private func manualMinutes(
+        _ key: String,
+        from workout: HKWorkout
+    ) -> Double? {
+        guard
+            let number =
+                workout.metadata?[key]
+                    as? NSNumber
+        else {
+            return nil
+        }
+
+        let value = number.doubleValue
+
+        guard value.isFinite else {
+            return nil
+        }
+
+        return max(0, value)
+    }
 
     private func averageMETs(
         for workout: HKWorkout

@@ -283,28 +283,68 @@ final class ActivityRepository {
                 
             )
             
-            let automaticIntensity =
-                decision.role.includesAerobic
-                ? AutomaticIntensityClassifier
-                    .classify(
-                        workoutStart:
-                            incoming.startDate,
-                        workoutEnd:
-                            incoming.endDate,
-                        recordedDurationMinutes:
-                            incoming
-                                .recordedDurationMinutes,
-                        physicalEffort:
-                            incoming
-                                .physicalEffortSamples,
-                        averageMETs:
-                            incoming.averageMETs
+            let effectiveRole =
+                incoming.manualRole
+                    ?? decision.role
+
+            let effectiveRoleSource:
+                WorkoutRoleSource =
+                    incoming.manualRole == nil
+                    ? decision.source
+                    : .manualEntry
+
+            let effectiveIntensity:
+                AutomaticIntensityResult
+
+            if incoming.manualRole != nil {
+                if effectiveRole.includesAerobic {
+                    effectiveIntensity =
+                        AutomaticIntensityResult(
+                            moderateMinutes:
+                                incoming
+                                    .manualModerateMinutes
+                                ?? 0,
+                            vigorousMinutes:
+                                incoming
+                                    .manualVigorousMinutes
+                                ?? 0,
+                            sourceRawValue:
+                                "manualEntry"
+                        )
+                } else {
+                    effectiveIntensity =
+                        AutomaticIntensityResult(
+                            moderateMinutes: nil,
+                            vigorousMinutes: nil,
+                            sourceRawValue:
+                                "notApplicable"
+                        )
+                }
+            } else {
+                effectiveIntensity =
+                    effectiveRole.includesAerobic
+                    ? AutomaticIntensityClassifier
+                        .classify(
+                            workoutStart:
+                                incoming.startDate,
+                            workoutEnd:
+                                incoming.endDate,
+                            recordedDurationMinutes:
+                                incoming
+                                    .recordedDurationMinutes,
+                            physicalEffort:
+                                incoming
+                                    .physicalEffortSamples,
+                            averageMETs:
+                                incoming.averageMETs
+                        )
+                    : AutomaticIntensityResult(
+                        moderateMinutes: nil,
+                        vigorousMinutes: nil,
+                        sourceRawValue:
+                            "notApplicable"
                     )
-                : AutomaticIntensityResult(
-                    moderateMinutes: nil,
-                    vigorousMinutes: nil,
-                    sourceRawValue: "notApplicable"
-                )
+            }
 
             if let existing =
                 storedByUUID[incoming.healthKitUUID] {
@@ -329,29 +369,30 @@ final class ActivityRepository {
 
                 existing.importedAt = importedAt
 
+                let keepOlderLocalManualEntry =
+                    incoming.manualRole == nil
+                    && existing.workoutRoleSource
+                        == .manualEntry
 
-                /*
-                 HealthKit workouts always adopt the current
-                 classification rules or the user's global
-                 workout-type setting.
+                if !keepOlderLocalManualEntry {
+                    existing.workoutRole =
+                        effectiveRole
 
-                 The old per-workout review system is no longer
-                 authoritative.
-                 */
-                existing.workoutRole =
-                    decision.role
+                    existing.workoutRoleSource =
+                        effectiveRoleSource
 
-                existing.workoutRoleSource =
-                    decision.source
+                    existing.moderateMinutes =
+                        effectiveIntensity
+                            .moderateMinutes
 
-                existing.moderateMinutes =
-                    automaticIntensity.moderateMinutes
+                    existing.vigorousMinutes =
+                        effectiveIntensity
+                            .vigorousMinutes
 
-                existing.vigorousMinutes =
-                    automaticIntensity.vigorousMinutes
-
-                existing.intensitySourceRawValue =
-                    automaticIntensity.sourceRawValue
+                    existing.intensitySourceRawValue =
+                        effectiveIntensity
+                            .sourceRawValue
+                }
 
                 updatedCount += 1
             } else {
@@ -373,17 +414,17 @@ final class ActivityRepository {
                     importedAt:
                         importedAt,
                     workoutRole:
-                        decision.role,
+                        effectiveRole,
                     workoutRoleSource:
-                        decision.source,
+                        effectiveRoleSource,
                     moderateMinutes:
-                        automaticIntensity
+                        effectiveIntensity
                             .moderateMinutes,
                     vigorousMinutes:
-                        automaticIntensity
+                        effectiveIntensity
                             .vigorousMinutes,
                     intensitySourceRawValue:
-                        automaticIntensity
+                        effectiveIntensity
                             .sourceRawValue
                 )
 
@@ -402,6 +443,23 @@ final class ActivityRepository {
         return WorkoutImportResult(
             insertedCount: insertedCount,
             updatedCount: updatedCount
+        )
+    }
+    
+    func deleteStoredWorkout(
+        _ workout: StoredWorkout,
+        now: Date = .now
+    ) throws {
+        let startDate = workout.startDate
+        let endDate = workout.endDate
+
+        modelContext.delete(workout)
+        try modelContext.save()
+
+        try rebuildDailyActivityRecords(
+            from: startDate,
+            through: endDate,
+            calculatedAt: now
         )
     }
 
@@ -782,7 +840,8 @@ final class ActivityRepository {
                 records.isEmpty ? .unavailable : .current,
             isInsideGuidedScope:
                 settings.usesGeneralAdultGuidance
-                && settings.ageBandRawValue == "18to64",
+                && settings.ageBand
+                    .supportsCoreActivityGuidance,
             strengthRecordedTodayOrYesterday:
                 strengthRecordedTodayOrYesterday,
             aerobicMinutesCompletedToday:
@@ -931,7 +990,39 @@ final class ActivityRepository {
 
         return settings
     }
-    
+    func completeOnboarding(
+        ageBand: ActivityAgeBand,
+        now: Date = .now
+    ) throws {
+        guard let defaultTargets =
+            ageBand.defaultTargets
+        else {
+            return
+        }
+
+        let settings =
+            try loadOrCreateSettings()
+
+        settings.ageBand = ageBand
+
+        settings.aerobicTargetMinutes =
+            defaultTargets
+                .aerobicMinimumMinutes
+
+        settings.strengthTargetDays =
+            defaultTargets
+                .strengthMinimumDays
+
+        settings.usesCustomActivityTargets =
+            false
+
+        settings.hasCompletedOnboarding =
+            true
+
+        settings.updatedAt = now
+
+        try modelContext.save()
+    }
     
     private func makePersonalBaselineComparison(
         currentRecords: [DailyActivityRecord],
@@ -1609,6 +1700,7 @@ final class ActivityRepository {
     
     @discardableResult
     func addManualWorkout(
+        healthKitUUID: String? = nil,
         activityTypeRawValue: Int,
         startDate: Date,
         durationMinutes: Double,
@@ -1737,7 +1829,8 @@ final class ActivityRepository {
 
         let workout = StoredWorkout(
             healthKitUUID:
-                "manual:\(UUID().uuidString)",
+                healthKitUUID
+                    ?? "manual:\(UUID().uuidString)",
             startDate: startDate,
             endDate: endDate,
             recordedDurationMinutes:

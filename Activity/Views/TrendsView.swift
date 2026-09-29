@@ -56,6 +56,15 @@ enum TrendPeriod:
 }
 
 struct TrendsView: View {
+    let healthKit: HealthKitService
+    let onWorkoutsChanged: () -> Void
+
+    @Query(
+        sort: \StoredWorkout.startDate,
+        order: .reverse
+    )
+    private var allWorkouts:
+        [StoredWorkout]
     @Query(
         sort:
             \DailyActivityRecord.dayStart,
@@ -70,7 +79,13 @@ struct TrendsView: View {
 
     @State private var period:
         TrendPeriod = .thirtyDays
+    
+    private var recentWorkouts:
+        [StoredWorkout] {
 
+        Array(allWorkouts.prefix(3))
+    }
+    
     private var settings: AppSettings? {
         savedSettings.first
     }
@@ -121,6 +136,60 @@ struct TrendsView: View {
         return Double(strengthDays)
             / Double(records.count)
             * 7
+    }
+    
+    private var recentWorkoutsSection:
+        some View {
+
+        VStack(
+            alignment: .leading,
+            spacing: 16
+        ) {
+            HStack {
+                ActivitySectionLabel(
+                    title: "Recent workouts"
+                )
+
+                Spacer()
+
+                NavigationLink {
+                    RecentWorkoutsView(
+                        healthKit: healthKit,
+                        onWorkoutsChanged:
+                            onWorkoutsChanged
+                    )
+                } label: {
+                    Text("See All")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                }
+            }
+
+            if recentWorkouts.isEmpty {
+                Text(
+                    "No workouts recorded yet."
+                )
+                .foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(
+                        recentWorkouts,
+                        id: \.healthKitUUID
+                    ) { workout in
+                        compactWorkoutRow(
+                            workout
+                        )
+
+                        if workout.healthKitUUID
+                            != recentWorkouts.last?
+                                .healthKitUUID {
+
+                            ActivityDivider()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private var dailyAerobicPace: Double {
@@ -217,7 +286,9 @@ struct TrendsView: View {
                         .padding(.vertical, 26)
 
                     movementSummary
+                    recentWorkoutsSection
                 }
+                
             }
             .padding(
                 .horizontal,
@@ -752,7 +823,61 @@ struct TrendsView: View {
             )
         )
     }
+    
+    private func compactWorkoutRow(
+        _ workout: StoredWorkout
+    ) -> some View {
+        HStack(spacing: 14) {
+            Image(
+                systemName:
+                    workout.workoutRole
+                        .includesStrength
+                    ? "dumbbell"
+                    : "figure.run"
+            )
+            .frame(width: 26)
+            .foregroundStyle(
+                ActivityTheme.accent
+            )
 
+            VStack(
+                alignment: .leading,
+                spacing: 4
+            ) {
+                Text(workoutTitle(workout))
+                    .font(.body)
+                    .fontWeight(.medium)
+
+                Text(
+                    workout.startDate.formatted(
+                        date: .abbreviated,
+                        time: .omitted
+                    )
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Text(
+                "\(Int(workout.durationMinutes.rounded())) min"
+            )
+            .font(.subheadline)
+            .fontWeight(.semibold)
+        }
+        .padding(.vertical, 13)
+    }
+
+    private func workoutTitle(
+        _ workout: StoredWorkout
+    ) -> String {
+        WorkoutTypeCatalog.definition(
+            forRawValue:
+                workout.activityTypeRawValue
+        )?.title
+        ?? "Workout"
+    }
     private func formattedOptional(
         _ value: Double?,
         digits: Int,

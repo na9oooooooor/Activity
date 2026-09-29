@@ -271,6 +271,10 @@ struct HealthKitWorkoutValue: Sendable {
         [PhysicalEffortValue]
 
     let averageMETs: Double?
+
+    let manualRole: WorkoutRole?
+    let manualModerateMinutes: Double?
+    let manualVigorousMinutes: Double?
 }
 
 struct WorkoutImportResult:

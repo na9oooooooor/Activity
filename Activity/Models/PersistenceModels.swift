@@ -418,4 +418,20 @@ extension AppSettings {
                 )
         )
     }
+
+    var ageBand: ActivityAgeBand {
+        get {
+            ActivityAgeBand(
+                rawValue: ageBandRawValue
+            ) ?? .adult18To64
+        }
+
+        set {
+            ageBandRawValue = newValue.rawValue
+
+            usesGeneralAdultGuidance =
+                newValue
+                    .supportsCoreActivityGuidance
+        }
+    }
 }

@@ -14,10 +14,24 @@ struct ContentView: View {
     @State private var showingExplanation = false
     @State private var selectedTab: AppTab = .today
     @State private var showingSettings = false
+    @Query private var savedSettings:
+        [AppSettings]
 
     @Environment(\.modelContext)
     private var modelContext
+    
+    private var onboardingPresented:
+        Binding<Bool> {
 
+        Binding(
+            get: {
+                savedSettings.first?
+                    .hasCompletedOnboarding
+                    != true
+            },
+            set: { _ in }
+        )
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -31,8 +45,13 @@ struct ContentView: View {
                 .tag(AppTab.today)
             
             NavigationStack {
-                TrendsView()
-                    .toolbar {
+                TrendsView(
+                    healthKit: healthKit
+                ) {
+                    dashboard.loadStoredData(
+                        modelContext: modelContext
+                    )
+                }                    .toolbar {
                         ToolbarItem(
                             placement:
                                     .topBarTrailing
@@ -74,6 +93,18 @@ struct ContentView: View {
                     .medium,
                     .large
                 ])
+            }
+        }
+        .fullScreenCover(
+            isPresented:
+                onboardingPresented
+        ) {
+            OnboardingView(
+                healthKit: healthKit
+            ) {
+                Task {
+                    await prepareDashboard()
+                }
             }
         }
         .sheet(
@@ -503,10 +534,25 @@ struct ContentView: View {
                 .inline
             )
             .toolbar {
-                ToolbarItem(
-                    placement:
-                        .topBarTrailing
+                ToolbarItemGroup(
+                    placement: .topBarTrailing
                 ) {
+                    NavigationLink {
+                        ManualWorkoutEntryView(
+                            healthKit: healthKit
+                        ) {
+                            dashboard.loadStoredData(
+                                modelContext:
+                                    modelContext
+                            )
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel(
+                        "Add workout"
+                    )
+
                     settingsButton
                 }
             }
@@ -551,7 +597,9 @@ struct ContentView: View {
                     }
                 }
                 NavigationLink {
-                    ManualWorkoutEntryView {
+                    ManualWorkoutEntryView(
+                        healthKit: healthKit
+                    ) {
                         dashboard.loadStoredData(
                             modelContext: modelContext
                         )
