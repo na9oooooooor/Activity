@@ -19,7 +19,8 @@ struct ContentView: View {
 
     @Environment(\.modelContext)
     private var modelContext
-    
+    @Environment(\.scenePhase)
+    private var scenePhase
     private var onboardingPresented:
         Binding<Bool> {
 
@@ -72,6 +73,21 @@ struct ContentView: View {
         .tint(ActivityTheme.accent)
         .task {
             await prepareDashboard()
+        }
+        .onChange(
+            of: scenePhase
+        ) { _, newPhase in
+            guard newPhase == .active,
+                  savedSettings.first?
+                    .hasCompletedOnboarding
+                    == true
+            else {
+                return
+            }
+
+            Task {
+                await prepareDashboard()
+            }
         }
         .sheet(
             isPresented:
@@ -472,19 +488,38 @@ struct ContentView: View {
 
     // MARK: - Navigation
 
-        private var settingsButton:
-            some View {
+    private var settingsButton:
+        some View {
 
-            Button {
-                showingSettings = true
-            } label: {
-                Image(
-                    systemName:
-                        "line.3.horizontal"
-                )
+        Button {
+            showingSettings = true
+        } label: {
+            Image(
+                systemName:
+                    "line.3.horizontal"
+            )
+            .font(.subheadline.bold())
+            .foregroundStyle(
+                ActivityTheme.accent
+            )
+            .frame(
+                width: 44,
+                height: 44
+            )
+            .background(
+                ActivityTheme.surface,
+                in: Circle()
+            )
+            .overlay {
+                Circle()
+                    .stroke(
+                        ActivityTheme.divider,
+                        lineWidth: 0.75
+                    )
             }
-            .accessibilityLabel("Settings")
         }
+        .accessibilityLabel("Settings")
+    }
         
     private var todayTab:
         some View {
@@ -534,25 +569,9 @@ struct ContentView: View {
                 .inline
             )
             .toolbar {
-                ToolbarItemGroup(
+                ToolbarItem(
                     placement: .topBarTrailing
                 ) {
-                    NavigationLink {
-                        ManualWorkoutEntryView(
-                            healthKit: healthKit
-                        ) {
-                            dashboard.loadStoredData(
-                                modelContext:
-                                    modelContext
-                            )
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel(
-                        "Add workout"
-                    )
-
                     settingsButton
                 }
             }
@@ -567,6 +586,19 @@ struct ContentView: View {
                 appleHealthSection
 
                 Section("Activity") {
+                    NavigationLink {
+                        GuidanceSettingsView {
+                            dashboard.loadStoredData(
+                                modelContext: modelContext
+                            )
+                        }
+                    } label: {
+                        Label(
+                            "Guidance",
+                            systemImage:
+                                "person.text.rectangle"
+                        )
+                    }
                     NavigationLink {
                         ActivityTargetSettingsView {
                             dashboard
@@ -596,20 +628,7 @@ struct ContentView: View {
                         )
                     }
                 }
-                NavigationLink {
-                    ManualWorkoutEntryView(
-                        healthKit: healthKit
-                    ) {
-                        dashboard.loadStoredData(
-                            modelContext: modelContext
-                        )
-                    }
-                } label: {
-                    Label(
-                        "Add Workout",
-                        systemImage: "plus.circle"
-                    )
-                }
+               
                 
                 Section("Workouts") {
                     NavigationLink {
@@ -701,6 +720,10 @@ struct ContentView: View {
     }
 
     private func refreshDashboard() async {
+        guard !dashboard.state.isLoading
+        else {
+            return
+        }
         guard healthKit.accessState
             == .requestFinished
         else {

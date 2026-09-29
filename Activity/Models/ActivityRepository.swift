@@ -1024,6 +1024,42 @@ final class ActivityRepository {
         try modelContext.save()
     }
     
+    func updateAgeBand(
+        _ ageBand: ActivityAgeBand,
+        now: Date = .now
+    ) throws {
+        guard ageBand
+            .supportsCoreActivityGuidance
+        else {
+            return
+        }
+
+        let settings =
+            try loadOrCreateSettings()
+
+        settings.ageBand = ageBand
+
+        /*
+         Preserve targets the user customized.
+
+         If the user still uses app defaults, apply the
+         defaults belonging to the selected age group.
+         */
+        if !settings.usesCustomActivityTargets,
+           let defaults = ageBand.defaultTargets {
+
+            settings.aerobicTargetMinutes =
+                defaults.aerobicMinimumMinutes
+
+            settings.strengthTargetDays =
+                defaults.strengthMinimumDays
+        }
+
+        settings.updatedAt = now
+
+        try modelContext.save()
+    }
+    
     private func makePersonalBaselineComparison(
         currentRecords: [DailyActivityRecord],
         baselineRecords: [DailyActivityRecord]

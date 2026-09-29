@@ -41,7 +41,8 @@ struct RecentWorkoutsView: View {
                             )
                         } label: {
                             workoutRow(workout)
-                        }.foregroundStyle(.primary)
+                                .foregroundStyle(.primary)
+                        }
                     }
                 }
                 .listStyle(.plain)

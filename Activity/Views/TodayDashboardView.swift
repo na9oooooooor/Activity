@@ -34,36 +34,31 @@ struct TodayDashboardView: View {
         ScrollView {
             VStack(
                 alignment: .leading,
-                spacing: 0
+                spacing: 24
             ) {
-                hero
+                pageHeader
 
-                ActivityDivider()
+                recommendationCard
 
-                todayRow
-                    .padding(.vertical, 22)
+                activityHealthHeader
 
-                ActivityDivider()
-
-                targetSection
-                    .padding(.vertical, 24)
-
-                ActivityDivider()
+                activitySummaryCard
 
                 comparisonRow
-                    .padding(.vertical, 22)
-
-                ActivityDivider()
+                    .activityCard()
 
                 updateFooter
-                    .padding(.top, 18)
+                    .padding(
+                        .horizontal,
+                        2
+                    )
             }
             .padding(
                 .horizontal,
                 ActivityTheme.pagePadding
             )
-            .padding(.top, 22)
-            .padding(.bottom, 36)
+            .padding(.top, 8)
+            .padding(.bottom, 110)
         }
         .background(
             ActivityTheme.background
@@ -93,6 +88,38 @@ struct TodayDashboardView: View {
                 )
             }
         }
+    }
+    // MARK: - Page header
+
+    private var pageHeader: some View {
+        VStack(
+            alignment: .leading,
+            spacing: 2
+        ) {
+            Text(
+                input.windowEnd.formatted(
+                    .dateTime
+                        .weekday(.wide)
+                        .day()
+                        .month(.wide)
+                )
+            )
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+
+            Text("Today")
+                .font(
+                    .system(
+                        size: 44,
+                        weight: .bold
+                    )
+                )
+                .fontWidth(.condensed)
+                .tracking(-0.7)
+        }
+        .accessibilityElement(
+            children: .combine
+        )
     }
 
     // MARK: - Hero
@@ -155,6 +182,129 @@ struct TodayDashboardView: View {
         }
         .padding(.bottom, 28)
     }
+    
+    // MARK: - Recommendation hero
+
+    private var recommendationCard: some View {
+        VStack(
+            alignment: .leading,
+            spacing: 18
+        ) {
+            Button {
+                presentedSheet = .today
+            } label: {
+                HStack(spacing: 12) {
+                    recommendationSymbol
+
+                    Text(recommendationTitle)
+                        .font(.headline)
+                        .foregroundStyle(
+                            recommendationTint
+                        )
+
+                    Spacer()
+
+                    Image(
+                        systemName:
+                            "chevron.right"
+                    )
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Text(recommendationAction)
+                .font(
+                    .system(
+                        size: 28,
+                        weight: .bold
+                    )
+                )
+                .fontWidth(.condensed)
+                .tracking(-0.3)
+                .fixedSize(
+                    horizontal: false,
+                    vertical: true
+                )
+
+            Text(recommendationReason)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .fixedSize(
+                    horizontal: false,
+                    vertical: true
+                )
+
+            Picker(
+                "Today’s context",
+                selection: Binding(
+                    get: {
+                        todayContext
+                    },
+                    set: {
+                        onContextChange($0)
+                    }
+                )
+            ) {
+                ForEach(
+                    TodayContextSelection.allCases
+                ) { selection in
+                    Text(selection.title)
+                        .tag(selection)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityHint(
+                """
+                Changes today’s suggestion without changing \
+                your targets or workout history.
+                """
+            )
+        }
+        .padding(20)
+        .background(
+            recommendationTint.opacity(0.10),
+            in: RoundedRectangle(
+                cornerRadius: 24,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 24,
+                style: .continuous
+            )
+            .stroke(
+                recommendationTint.opacity(0.32),
+                lineWidth: 0.75
+            )
+        }
+    }
+
+    private var recommendationSymbol:
+        some View {
+
+        ZStack {
+            Circle()
+                .fill(recommendationTint)
+                .frame(
+                    width: 32,
+                    height: 32
+                )
+
+            Circle()
+                .fill(
+                    ActivityTheme.background
+                )
+                .frame(
+                    width: 10,
+                    height: 10
+                )
+        }
+        .accessibilityHidden(true)
+    }
 
     // MARK: - Today
 
@@ -201,6 +351,77 @@ struct TodayDashboardView: View {
         .accessibilityHint(
             "Opens the recommendation explanation and today context"
         )
+    }
+    
+    private var recommendationAction: String {
+        switch assessment
+            .recommendation
+            .reason {
+
+        case .targetsMet:
+            return """
+            You’ve done enough for your current targets.
+            """
+
+        case .aerobicGap:
+            return """
+            A 20–30 min brisk walk or aerobic session.
+            """
+
+        case .strengthGap:
+            return """
+            A 20–30 min strength session for the major \
+            muscle groups.
+            """
+
+        case .smallRemainingGap:
+            return """
+            A short, comfortable activity session can \
+            close the gap.
+            """
+
+        case .recentStrengthSession:
+            return """
+            Choose aerobic activity if you want to do \
+            more today.
+            """
+
+        case .aerobicSessionAlreadyCompleted:
+            return """
+            You’ve already completed aerobic activity today.
+            """
+
+        case .lowMovement:
+            return """
+            A short walk or light movement would help today.
+            """
+
+        case .recoveryChoice:
+            return """
+            Recovery today. Light movement is enough.
+            """
+
+        case .unavailableRecords:
+            return """
+            Connect Apple Health to get today’s suggestion.
+            """
+
+        case .staleRecords:
+            return """
+            Refresh your activity before using today’s \
+            suggestion.
+            """
+
+        case .importing:
+            return """
+            Your activity is being updated.
+            """
+
+        case .outsideGuidedScope:
+            return """
+            Today’s suggestion is unavailable for this profile.
+            """
+        }
     }
 
     // MARK: - Targets
@@ -336,6 +557,127 @@ struct TodayDashboardView: View {
             )) \(unit), rolling seven-day target
             """
         )
+    }
+    
+    private var activitySummaryCard:
+        some View {
+
+        VStack(
+            alignment: .leading,
+            spacing: 20
+        ) {
+            SevenDayActivityStrip(
+                days:
+                    input.activityStripDays,
+                aerobicTargetMinutes:
+                    input.targets
+                        .aerobicMinimumMinutes,
+                status:
+                    assessment.status,
+                recordState:
+                    input.snapshot.recordState,
+                onTap:
+                    onShowExplanation
+            )
+
+            chartLegend
+
+            ActivityDivider()
+
+            targetSection
+        }
+        .activityCard()
+    }
+
+    private var chartLegend: some View {
+        HStack(spacing: 18) {
+            Label {
+                Text("Target pace")
+            } icon: {
+                Capsule()
+                    .fill(
+                        ActivityTheme
+                            .elevatedSurface
+                    )
+                    .frame(
+                        width: 20,
+                        height: 7
+                    )
+            }
+
+            Label {
+                Text("Strength day")
+            } icon: {
+                Circle()
+                    .fill(.primary)
+                    .frame(
+                        width: 8,
+                        height: 8
+                    )
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .accessibilityElement(
+            children: .combine
+        )
+    }
+    
+    // MARK: - Activity Health
+
+    private var activityHealthHeader:
+        some View {
+
+        VStack(
+            alignment: .leading,
+            spacing: 10
+        ) {
+            HStack(
+                alignment: .firstTextBaseline
+            ) {
+                HStack(spacing: 8) {
+                    Text(statusTitle)
+                        .font(
+                            .system(
+                                size: 32,
+                                weight: .bold
+                            )
+                        )
+                        .fontWidth(.condensed)
+                        .tracking(-0.4)
+
+                    Button(
+                        action:
+                            onShowExplanation
+                    ) {
+                        Image(
+                            systemName:
+                                "info.circle"
+                        )
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        "How Activity Health works"
+                    )
+                }
+
+                Spacer()
+
+                Text("Last 7 days")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(healthSummary)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .fixedSize(
+                    horizontal: false,
+                    vertical: true
+                )
+        }
     }
 
     // MARK: - Personal comparison
