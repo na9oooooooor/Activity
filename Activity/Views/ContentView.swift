@@ -47,20 +47,22 @@ struct ContentView: View {
             
             NavigationStack {
                 TrendsView(
-                    healthKit: healthKit
-                ) {
-                    dashboard.loadStoredData(
-                        modelContext: modelContext
-                    )
-                }                    .toolbar {
-                        ToolbarItem(
-                            placement:
-                                    .topBarTrailing
-                        ) {
-                            settingsButton
-                        }
+                    healthKit: healthKit,
+                    onWorkoutsChanged: {
+                        dashboard.loadStoredData(
+                            modelContext:
+                                modelContext
+                        )
+                    },
+                    onShowSettings: {
+                        showingSettings = true
                     }
+                )
             }
+            .toolbar(
+                .hidden,
+                for: .navigationBar
+            )
             .tabItem {
                 Label(
                     "Trends",
@@ -71,6 +73,7 @@ struct ContentView: View {
             .tag(AppTab.trends)
         }
         .tint(ActivityTheme.accent)
+        .stableTabBar()
         .task {
             await prepareDashboard()
         }
@@ -487,7 +490,9 @@ struct ContentView: View {
     }
 
     // MARK: - Navigation
-
+    
+    
+    
     private var settingsButton:
         some View {
 
@@ -496,7 +501,7 @@ struct ContentView: View {
         } label: {
             Image(
                 systemName:
-                    "line.3.horizontal"
+                    "gearshape"
             )
             .font(.subheadline.bold())
             .foregroundStyle(
@@ -520,6 +525,8 @@ struct ContentView: View {
         }
         .accessibilityLabel("Settings")
     }
+    
+    
         
     private var todayTab:
         some View {
@@ -539,22 +546,23 @@ struct ContentView: View {
                             reasonText(
                                 for: assessment
                             ),
-                        onContextChange: {
-                            selection in
-
-                            dashboard
-                                .updateTodayContext(
-                                    selection,
-                                    modelContext:
-                                        modelContext
-                                )
-                        },
                         onShowExplanation: {
-                            showingExplanation =
-                                true
+                            showingExplanation = true
+                        },
+                        onShowSettings: {
+                            showingSettings = true
                         },
                         onRefresh: {
                             await refreshDashboard()
+                        },
+                        onContextChange: {
+                            selection in
+
+                            dashboard.updateTodayContext(
+                                selection,
+                                modelContext:
+                                    modelContext
+                            )
                         }
                     )
                 } else {
@@ -568,13 +576,10 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(
                 .inline
             )
-            .toolbar {
-                ToolbarItem(
-                    placement: .topBarTrailing
-                ) {
-                    settingsButton
-                }
-            }
+            .toolbar(
+                .hidden,
+                for: .navigationBar
+            )
         }
     }
     
@@ -697,10 +702,7 @@ struct ContentView: View {
 
             await refreshDashboard()
         } else {
-            /*
-             Cached data can still be displayed while a
-             new HealthKit request is waiting.
-             */
+          
             dashboard.loadStoredData(
                 modelContext: modelContext
             )
@@ -800,8 +802,7 @@ struct ContentView: View {
 
         case .strengthGap:
             return """
-            Your recorded strength days remain below your \
-            current target.
+            Strength is still below your 7-day target.
             """
 
         case .smallRemainingGap:
@@ -854,6 +855,19 @@ struct ContentView: View {
             The general V1 guidance does not fit this \
             profile.
             """
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func stableTabBar() -> some View {
+        if #available(iOS 26.0, *) {
+            self.tabBarMinimizeBehavior(
+                .never
+            )
+        } else {
+            self
         }
     }
 }

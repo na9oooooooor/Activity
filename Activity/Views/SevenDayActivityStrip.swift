@@ -116,9 +116,9 @@ struct SevenDayActivityStrip: View {
         ZStack(alignment: .bottom) {
             Rectangle()
                 .fill(
-                    Color.secondary.opacity(0.35)
+                    tint.opacity(0.28)
                 )
-                .frame(height: 0.75)
+                .frame(height: 1)
                 .offset(
                     y: -paceLineHeight
                 )
@@ -156,12 +156,12 @@ struct SevenDayActivityStrip: View {
                                     ? tint
                                     : ActivityTheme
                                         .divider,
-                                lineWidth: 0.8
+                                lineWidth: 1
                             )
                     }
                     .frame(
-                        width: 6,
-                        height: 6
+                        width: 8,
+                        height: 8
                     )
                     .frame(
                         maxWidth: .infinity
@@ -188,8 +188,16 @@ struct SevenDayActivityStrip: View {
                 )
                 .foregroundStyle(
                     day.isToday
-                        ? .primary
+                        ? tint
                         : .secondary
+                )
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(
+                    day.isToday
+                        ? tint.opacity(0.10)
+                        : Color.clear,
+                    in: Capsule()
                 )
                 .frame(
                     maxWidth: .infinity
@@ -223,25 +231,22 @@ struct SevenDayActivityStrip: View {
             )
         } else if day.isToday {
             RoundedRectangle(
-                cornerRadius: 3,
+                cornerRadius: 4,
                 style: .continuous
             )
             .fill(
                 day.moderateEquivalentMinutes > 0
-                    ? tint.opacity(0.14)
-                    : Color.clear
+                    ? tint.opacity(0.48)
+                    : Color.secondary.opacity(0.10)
             )
             .overlay {
                 RoundedRectangle(
-                    cornerRadius: 3,
+                    cornerRadius: 4,
                     style: .continuous
                 )
                 .stroke(
                     tint,
-                    style: StrokeStyle(
-                        lineWidth: 1.25,
-                        dash: [5, 3]
-                    )
+                    lineWidth: 1.5
                 )
             }
             .frame(
@@ -255,7 +260,7 @@ struct SevenDayActivityStrip: View {
                 cornerRadius: 3,
                 style: .continuous
             )
-            .fill(tint)
+            .fill(tint.opacity(0.78))
             .frame(
                 width: barWidth,
                 height: height
@@ -266,7 +271,7 @@ struct SevenDayActivityStrip: View {
                 style: .continuous
             )
             .fill(
-                ActivityTheme.elevatedSurface
+                Color.secondary.opacity(0.12)
             )
             .frame(
                 width: barWidth,

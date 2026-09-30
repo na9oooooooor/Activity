@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Charts
+import HealthKit
 
 enum TrendPeriod:
     String,
@@ -14,7 +15,33 @@ enum TrendPeriod:
     var id: String {
         rawValue
     }
+    
+    var strengthGridColumnCount: Int {
+        switch self {
+        case .sevenDays:
+            return 7
 
+        case .thirtyDays:
+            return 10
+
+        case .ninetyDays:
+            return 13
+        }
+    }
+    
+    var completeWeekCount: Int {
+        switch self {
+        case .sevenDays:
+            return 1
+
+        case .thirtyDays:
+            return 4
+
+        case .ninetyDays:
+            return 12
+        }
+    }
+    
     var dayCount: Int {
         switch self {
         case .sevenDays:
@@ -55,9 +82,17 @@ enum TrendPeriod:
     }
 }
 
+private struct TrendWeekCoverage:
+    Identifiable {
+
+    let id: Date
+    let metTargets: Bool
+}
+
 struct TrendsView: View {
     let healthKit: HealthKitService
     let onWorkoutsChanged: () -> Void
+    let onShowSettings: () -> Void
 
     @Query(
         sort: \StoredWorkout.startDate,
@@ -104,6 +139,106 @@ struct TrendsView: View {
                 .reversed()
         )
     }
+    
+    private var weekCoverage:
+        [TrendWeekCoverage] {
+
+        let requiredDayCount =
+            period.completeWeekCount * 7
+
+        let coveredRecords =
+            Array(
+                records.suffix(
+                    requiredDayCount
+                )
+            )
+
+        return stride(
+            from: 0,
+            to: coveredRecords.count,
+            by: 7
+        )
+        .compactMap { startIndex in
+            let endIndex = min(
+                startIndex + 7,
+                coveredRecords.count
+            )
+
+            let weekRecords =
+                Array(
+                    coveredRecords[
+                        startIndex..<endIndex
+                    ]
+                )
+
+            guard weekRecords.count == 7,
+                  let firstDay =
+                    weekRecords.first?.dayStart
+            else {
+                return nil
+            }
+
+            let aerobicMinutes =
+                weekRecords.reduce(0) {
+                    result,
+                    record in
+
+                    result
+                        + record
+                            .guidelineModerateEquivalentMinutes
+                }
+
+            let strengthDays =
+                weekRecords.filter(
+                    \.isStrengthDay
+                ).count
+
+            let metTargets =
+                aerobicMinutes
+                    >= targets
+                        .aerobicMinimumMinutes
+                && strengthDays
+                    >= targets
+                        .strengthMinimumDays
+
+            return TrendWeekCoverage(
+                id: firstDay,
+                metTargets: metTargets
+            )
+        }
+    }
+
+    private var coveredWeekCount: Int {
+        weekCoverage.filter(
+            \.metTargets
+        ).count
+    }
+    
+    private var displayedDateRange: String {
+        guard let startDate =
+                records.first?.dayStart,
+              let endDate =
+                records.last?.dayStart
+        else {
+            return period.title
+        }
+
+        let start =
+            startDate.formatted(
+                .dateTime
+                    .day()
+                    .month(.abbreviated)
+            )
+
+        let end =
+            endDate.formatted(
+                .dateTime
+                    .day()
+                    .month(.abbreviated)
+            )
+
+        return "\(start) – \(end)"
+    }
 
     private var aerobicWeeklyPace: Double {
         guard !records.isEmpty else {
@@ -138,12 +273,18 @@ struct TrendsView: View {
             * 7
     }
     
+    private var strengthDayCount: Int {
+        records.filter(
+            \.isStrengthDay
+        ).count
+    }
+    
     private var recentWorkoutsSection:
         some View {
 
         VStack(
             alignment: .leading,
-            spacing: 16
+            spacing: 14
         ) {
             HStack {
                 ActivitySectionLabel(
@@ -167,26 +308,86 @@ struct TrendsView: View {
 
             if recentWorkouts.isEmpty {
                 Text(
-                    "No workouts recorded yet."
+                    """
+                    Workouts imported from Apple Health and workouts you add will appear here.
+                    """
                 )
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .frame(
+                    maxWidth: .infinity,
+                    alignment: .leading
+                )
+                .padding(20)
+                .background(
+                    ActivityTheme.surface,
+                    in: RoundedRectangle(
+                        cornerRadius: 22,
+                        style: .continuous
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: 22,
+                        style: .continuous
+                    )
+                    .stroke(
+                        ActivityTheme.divider,
+                        lineWidth: 0.75
+                    )
+                }
             } else {
                 VStack(spacing: 0) {
                     ForEach(
                         recentWorkouts,
                         id: \.healthKitUUID
                     ) { workout in
-                        compactWorkoutRow(
-                            workout
-                        )
+                        NavigationLink {
+                            WorkoutDetailView(
+                                workout: workout,
+                                healthKit: healthKit,
+                                onDeleted:
+                                    onWorkoutsChanged
+                            )
+                        } label: {
+                            compactWorkoutRow(
+                                workout
+                            )
+                        }
+                        .buttonStyle(.plain)
 
                         if workout.healthKitUUID
                             != recentWorkouts.last?
                                 .healthKitUUID {
 
                             ActivityDivider()
+                                .padding(
+                                    .leading,
+                                    64
+                                )
                         }
                     }
+                }
+                .padding(
+                    .horizontal,
+                    18
+                )
+                .background(
+                    ActivityTheme.surface,
+                    in: RoundedRectangle(
+                        cornerRadius: 22,
+                        style: .continuous
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: 22,
+                        style: .continuous
+                    )
+                    .stroke(
+                        ActivityTheme.divider,
+                        lineWidth: 0.75
+                    )
                 }
             }
         }
@@ -217,6 +418,114 @@ struct TrendsView: View {
             records.compactMap(
                 \.activeEnergyKilocalories
             )
+        )
+    }
+    
+    private var coverageCard: some View {
+        HStack(
+            alignment: .bottom,
+            spacing: 16
+        ) {
+            VStack(
+                alignment: .leading,
+                spacing: 14
+            ) {
+                Text(
+                    "Covered \(coveredWeekCount) of \(weekCoverage.count) \(weekCoverage.count == 1 ? "week" : "weeks")"
+                )
+                .font(
+                    .system(
+                        size: 30,
+                        weight: .bold
+                    )
+                )
+                .fontWidth(.condensed)
+                .tracking(-0.3)
+                .fixedSize(
+                    horizontal: false,
+                    vertical: true
+                )
+
+                HStack(spacing: 7) {
+                    ForEach(weekCoverage) {
+                        week in
+
+                        Capsule()
+                            .fill(
+                                week.metTargets
+                                    ? ActivityTheme.success
+                                    : ActivityTheme.surface
+                            )
+                            .overlay {
+                                Capsule()
+                                    .stroke(
+                                        week.metTargets
+                                            ? ActivityTheme.success
+                                            : ActivityTheme.divider,
+                                        lineWidth: 1
+                                    )
+                            }
+                            .frame(
+                                maxWidth: 48
+                            )
+                            .frame(height: 12)
+                    }
+                }
+                .accessibilityHidden(true)
+
+                Text(
+                    """
+                    A week counts when both aerobic and strength targets were met. Missing a week is fine; the next one starts fresh.
+                    """
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(
+                    horizontal: false,
+                    vertical: true
+                )
+            }
+
+            Spacer(minLength: 0)
+
+            Image("pebble_recovery")
+                .resizable()
+                .scaledToFit()
+                .frame(
+                    width: 112,
+                    height: 112
+                )
+                .accessibilityHidden(true)
+        }
+        .padding(22)
+        .background(
+            ActivityTheme.success.opacity(
+                0.09
+            ),
+            in: RoundedRectangle(
+                cornerRadius: 24,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 24,
+                style: .continuous
+            )
+            .stroke(
+                ActivityTheme.success.opacity(
+                    0.28
+                ),
+                lineWidth: 0.75
+            )
+        }
+        .accessibilityElement(
+            children: .combine
+        )
+        .accessibilityLabel(
+            """
+            Covered \(coveredWeekCount) of \(weekCoverage.count) weeks. A week counts when both aerobic and strength targets were met.
+            """
         )
     }
 
@@ -265,27 +574,27 @@ struct TrendsView: View {
                 if records.isEmpty {
                     emptyState
                 } else {
-                    primaryMetrics
+                    coverageCard
+                        .padding(.bottom, 26)
 
-                    ActivityDivider()
-                        .padding(.vertical, 26)
+                    primaryMetrics
+                        .padding(.bottom, 26)
 
                     aerobicSection
-
-                    ActivityDivider()
-                        .padding(.vertical, 26)
+                        .activityCard()
+                        .padding(.bottom, 24)
 
                     strengthSection
-
-                    ActivityDivider()
-                        .padding(.vertical, 26)
+                        .activityCard()
+                        .padding(.bottom, 24)
 
                     stepsSection
-
-                    ActivityDivider()
-                        .padding(.vertical, 26)
+                        .activityCard()
+                        .padding(.bottom, 26)
 
                     movementSummary
+                        .padding(.bottom, 28)
+
                     recentWorkoutsSection
                 }
                 
@@ -301,23 +610,70 @@ struct TrendsView: View {
             ActivityTheme.background
                 .ignoresSafeArea()
         )
-        .navigationTitle("Trends")
-        .navigationBarTitleDisplayMode(.inline)
+
     }
 
     private var header: some View {
-        VStack(
-            alignment: .leading,
-            spacing: 8
+        HStack(
+            alignment: .center,
+            spacing: 16
         ) {
-            ActivitySectionLabel(
-                title: "Activity trends"
+            VStack(
+                alignment: .leading,
+                spacing: 1
+            ) {
+                Text(displayedDateRange)
+                    .font(
+                        .subheadline.weight(
+                            .semibold
+                        )
+                    )
+                    .foregroundStyle(.secondary)
+
+                Text("Trends")
+                    .font(
+                        .system(
+                            size: 40,
+                            weight: .bold
+                        )
+                    )
+                    .fontWidth(.condensed)
+                    .tracking(-0.5)
+            }
+            .accessibilityElement(
+                children: .combine
             )
 
-            Text(period.title)
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .fontWidth(.condensed)
+            Spacer(minLength: 12)
+
+            Button(
+                action: onShowSettings
+            ) {
+                Image(
+                    systemName: "gearshape"
+                )
+                .font(.subheadline.bold())
+                .foregroundStyle(
+                    ActivityTheme.accent
+                )
+                .frame(
+                    width: 44,
+                    height: 44
+                )
+                .background(
+                    ActivityTheme.surface,
+                    in: Circle()
+                )
+                .overlay {
+                    Circle()
+                        .stroke(
+                            ActivityTheme.divider,
+                            lineWidth: 0.75
+                        )
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
         }
     }
 
@@ -340,27 +696,33 @@ struct TrendsView: View {
     }
 
     private var primaryMetrics: some View {
-        let aerobicTargetText =
+        let aerobicTarget =
             formatted(
-                targets.aerobicMinimumMinutes,
+                targets
+                    .aerobicMinimumMinutes,
                 digits: 0
-            ) + " min"
+            )
 
-        let strengthTargetText =
-            "\(targets.strengthMinimumDays) days"
+        let strengthTarget =
+            String(
+                targets
+                    .strengthMinimumDays
+            )
 
         return HStack(
             alignment: .top,
             spacing: 22
         ) {
             primaryMetric(
-                title: "Aerobic pace",
+                title: "Aerobic per week",
                 value:
                     formatted(
                         aerobicWeeklyPace,
                         digits: 0
                     ),
-                target: aerobicTargetText,
+                unit: "min",
+                target:
+                    aerobicTarget + " min",
                 targetMet:
                     aerobicWeeklyPace
                     >= targets
@@ -368,24 +730,29 @@ struct TrendsView: View {
             )
 
             Rectangle()
-                .fill(ActivityTheme.divider)
+                .fill(
+                    ActivityTheme.divider
+                )
                 .frame(
                     width: 0.75,
-                    height: 98
+                    height: 112
                 )
 
             primaryMetric(
-                title: "Strength pace",
+                title: "Strength per week",
                 value:
                     formatted(
                         strengthWeeklyPace,
                         digits: 1
                     ),
-                target: strengthTargetText,
+                unit: "days",
+                target:
+                    strengthTarget + " days",
                 targetMet:
                     strengthWeeklyPace
                     >= Double(
-                        targets.strengthMinimumDays
+                        targets
+                            .strengthMinimumDays
                     )
             )
         }
@@ -394,6 +761,7 @@ struct TrendsView: View {
     private func primaryMetric(
         title: String,
         value: String,
+        unit: String,
         target: String,
         targetMet: Bool
     ) -> some View {
@@ -401,17 +769,27 @@ struct TrendsView: View {
             alignment: .leading,
             spacing: 9
         ) {
-            Text(value)
-                .font(
-                    ActivityTheme.largeMetricFont
-                )
-                .fontWidth(.condensed)
-
             Text(title)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 5) {
+            HStack(
+                alignment: .firstTextBaseline,
+                spacing: 5
+            ) {
+                Text(value)
+                    .font(
+                        ActivityTheme
+                            .largeMetricFont
+                    )
+                    .fontWidth(.condensed)
+
+                Text(unit)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 7) {
                 Circle()
                     .fill(
                         targetMet
@@ -419,21 +797,34 @@ struct TrendsView: View {
                             : ActivityTheme.accent
                     )
                     .frame(
-                        width: 6,
-                        height: 6
+                        width: 7,
+                        height: 7
                     )
 
-                Text("Target \(target) / 7 days")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Target " + target
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
         }
         .frame(
             maxWidth: .infinity,
             alignment: .leading
         )
+        .accessibilityElement(
+            children: .combine
+        )
+        .accessibilityLabel(
+            title
+                + ", "
+                + value
+                + " "
+                + unit
+                + ", target "
+                + target
+        )
     }
-
     private var aerobicSection: some View {
         VStack(
             alignment: .leading,
@@ -508,44 +899,227 @@ struct TrendsView: View {
     }
 
     private var strengthSection: some View {
-        VStack(
+        let gridSpacing:
+            CGFloat =
+                period == .ninetyDays
+                    ? 5
+                    : 8
+
+        let columns = Array(
+            repeating:
+                GridItem(
+                    .flexible(),
+                    spacing: gridSpacing
+                ),
+            count:
+                period
+                    .strengthGridColumnCount
+        )
+
+        return VStack(
             alignment: .leading,
-            spacing: 16
+            spacing: 18
         ) {
-            chartHeading(
-                title: "Strength",
-                detail: "Recorded strength days"
+            HStack(
+                alignment: .top,
+                spacing: 12
+            ) {
+                VStack(
+                    alignment: .leading,
+                    spacing: 4
+                ) {
+                    Text("Strength days")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+
+                    Text(
+                        "Each square is one day · "
+                        + formatted(
+                            strengthWeeklyPace,
+                            digits: 1
+                        )
+                        + " per week on average"
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(
+                        horizontal: false,
+                        vertical: true
+                    )
+                }
+
+                Spacer(minLength: 8)
+
+                VStack(spacing: 0) {
+                    Text(
+                        String(strengthDayCount)
+                    )
+                    .font(.headline)
+
+                    Text(
+                        strengthDayCount == 1
+                            ? "day"
+                            : "days"
+                    )
+                    .font(.caption)
+                }
+                .padding(
+                    .horizontal,
+                    14
+                )
+                .padding(
+                    .vertical,
+                    7
+                )
+                .background(
+                    ActivityTheme
+                        .elevatedSurface,
+                    in: Capsule()
+                )
+                .accessibilityElement(
+                    children: .combine
+                )
+            }
+
+            LazyVGrid(
+                columns: columns,
+                spacing: gridSpacing
+            ) {
+                ForEach(
+                    records,
+                    id: \.dayStart
+                ) { record in
+                    let isToday =
+                        Calendar.current
+                            .isDateInToday(
+                                record.dayStart
+                            )
+
+                    RoundedRectangle(
+                        cornerRadius:
+                            period == .ninetyDays
+                                ? 5
+                                : 7,
+                        style: .continuous
+                    )
+                    .fill(
+                        record.isStrengthDay
+                            ? ActivityTheme.success
+                            : ActivityTheme
+                                .elevatedSurface
+                    )
+                    .aspectRatio(
+                        1,
+                        contentMode: .fit
+                    )
+                    .overlay {
+                        RoundedRectangle(
+                            cornerRadius:
+                                period == .ninetyDays
+                                    ? 5
+                                    : 7,
+                            style: .continuous
+                        )
+                        .stroke(
+                            isToday
+                                ? ActivityTheme.accent
+                                : Color.clear,
+                            lineWidth: 1.5
+                        )
+                    }
+                    .accessibilityLabel(
+                        strengthDayAccessibilityLabel(
+                            record
+                        )
+                    )
+                }
+            }
+
+            strengthGridLegend
+        }
+    }
+    
+    private var strengthGridLegend:
+        some View {
+
+        HStack(spacing: 16) {
+            Label {
+                Text("Strength day")
+            } icon: {
+                RoundedRectangle(
+                    cornerRadius: 3,
+                    style: .continuous
+                )
+                .fill(
+                    ActivityTheme.success
+                )
+                .frame(
+                    width: 12,
+                    height: 12
+                )
+            }
+
+            Label {
+                Text("None recorded")
+            } icon: {
+                RoundedRectangle(
+                    cornerRadius: 3,
+                    style: .continuous
+                )
+                .fill(
+                    ActivityTheme
+                        .elevatedSurface
+                )
+                .frame(
+                    width: 12,
+                    height: 12
+                )
+            }
+
+            Label {
+                Text("Today")
+            } icon: {
+                RoundedRectangle(
+                    cornerRadius: 3,
+                    style: .continuous
+                )
+                .fill(Color.clear)
+                .frame(
+                    width: 12,
+                    height: 12
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: 3,
+                        style: .continuous
+                    )
+                    .stroke(
+                        ActivityTheme.accent,
+                        lineWidth: 1.5
+                    )
+                }
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+    
+    private func strengthDayAccessibilityLabel(
+        _ record: DailyActivityRecord
+    ) -> String {
+        let date =
+            record.dayStart.formatted(
+                date: .abbreviated,
+                time: .omitted
             )
 
-            Chart(records) { record in
-                BarMark(
-                    x: .value(
-                        "Day",
-                        record.dayStart,
-                        unit: .day
-                    ),
-                    y: .value(
-                        "Strength day",
-                        record.isStrengthDay
-                            ? 1
-                            : 0.06
-                    )
-                )
-                .foregroundStyle(
-                    record.isStrengthDay
-                        ? ActivityTheme.success
-                        : ActivityTheme
-                            .elevatedSurface
-                )
-                .cornerRadius(3)
-            }
-            .chartYScale(domain: 0...1)
-            .chartYAxis(.hidden)
-            .chartXAxis {
-                trendXAxis
-            }
-            .frame(height: 82)
+        if record.isStrengthDay {
+            return date
+                + ", strength day recorded"
         }
+
+        return date
+            + ", no strength workout recorded"
     }
 
     @ViewBuilder
@@ -557,12 +1131,74 @@ struct TrendsView: View {
 
         VStack(
             alignment: .leading,
-            spacing: 16
+            spacing: 18
         ) {
-            chartHeading(
-                title: "Movement",
-                detail: "Recorded daily steps"
-            )
+            HStack(
+                alignment: .top,
+                spacing: 12
+            ) {
+                VStack(
+                    alignment: .leading,
+                    spacing: 4
+                ) {
+                    Text("Movement")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+
+                    Text(
+                        """
+                        Recorded daily steps · context, not a target
+                        """
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(
+                        horizontal: false,
+                        vertical: true
+                    )
+                }
+
+                Spacer(minLength: 8)
+
+                if let averageSteps {
+                    VStack(spacing: 0) {
+                        Text(
+                            formatted(
+                                averageSteps,
+                                digits: 0
+                            )
+                        )
+                        .font(.headline)
+
+                        Text("avg")
+                            .font(.caption)
+                    }
+                    .padding(
+                        .horizontal,
+                        14
+                    )
+                    .padding(
+                        .vertical,
+                        7
+                    )
+                    .background(
+                        ActivityTheme
+                            .elevatedSurface,
+                        in: Capsule()
+                    )
+                    .accessibilityElement(
+                        children: .combine
+                    )
+                    .accessibilityLabel(
+                        """
+                        Average \(formatted(
+                            averageSteps,
+                            digits: 0
+                        )) steps
+                        """
+                    )
+                }
+            }
 
             if availableRecords.isEmpty {
                 Text("No accessible step data")
@@ -570,39 +1206,35 @@ struct TrendsView: View {
                     .foregroundStyle(.secondary)
                     .frame(
                         maxWidth: .infinity,
-                        minHeight: 100
+                        minHeight: 150
                     )
             } else {
-                Chart(availableRecords) {
-                    record in
+                Chart {
+                    ForEach(
+                        availableRecords,
+                        id: \.dayStart
+                    ) { record in
+                        if let steps =
+                            record.recordedSteps {
 
-                    if let steps =
-                        record.recordedSteps {
-
-                        LineMark(
-                            x: .value(
-                                "Day",
-                                record.dayStart,
-                                unit: .day
-                            ),
-                            y: .value(
-                                "Steps",
-                                steps
+                            AreaMark(
+                                x: .value(
+                                    "Day",
+                                    record.dayStart,
+                                    unit: .day
+                                ),
+                                y: .value(
+                                    "Steps",
+                                    steps
+                                )
                             )
-                        )
-                        .foregroundStyle(
-                            ActivityTheme.accent
-                        )
-                        .lineStyle(
-                            StrokeStyle(
-                                lineWidth: 2
+                            .foregroundStyle(
+                                ActivityTheme
+                                    .accent
+                                    .opacity(0.10)
                             )
-                        )
 
-                        if period
-                            == .sevenDays {
-
-                            PointMark(
+                            LineMark(
                                 x: .value(
                                     "Day",
                                     record.dayStart,
@@ -616,25 +1248,46 @@ struct TrendsView: View {
                             .foregroundStyle(
                                 ActivityTheme.accent
                             )
+                            .lineStyle(
+                                StrokeStyle(
+                                    lineWidth: 2
+                                )
+                            )
+                            .interpolationMethod(
+                                .linear
+                            )
                         }
+                    }
+
+                    if let averageSteps {
+                        RuleMark(
+                            y: .value(
+                                "Average",
+                                averageSteps
+                            )
+                        )
+                        .foregroundStyle(
+                            Color.secondary
+                                .opacity(0.55)
+                        )
+                        .lineStyle(
+                            StrokeStyle(
+                                lineWidth: 1,
+                                dash: [3, 3]
+                            )
+                        )
                     }
                 }
                 .chartXAxis {
                     trendXAxis
                 }
-                .chartYAxis {
-                    AxisMarks(
-                        position: .leading
-                    ) {
-                        AxisGridLine()
-                            .foregroundStyle(
-                                ActivityTheme.divider
-                            )
-
-                        AxisValueLabel()
-                    }
-                }
+                .chartYAxis(.hidden)
                 .frame(height: 170)
+                .accessibilityLabel(
+                    """
+                    Daily movement chart for \(period.title)
+                    """
+                )
             }
         }
     }
@@ -642,7 +1295,7 @@ struct TrendsView: View {
     private var movementSummary: some View {
         VStack(
             alignment: .leading,
-            spacing: 18
+            spacing: 14
         ) {
             ActivitySectionLabel(
                 title: "Daily averages"
@@ -652,14 +1305,14 @@ struct TrendsView: View {
                 columns: [
                     GridItem(
                         .flexible(),
-                        alignment: .leading
+                        spacing: 12
                     ),
                     GridItem(
                         .flexible(),
-                        alignment: .leading
+                        spacing: 12
                     )
                 ],
-                spacing: 22
+                spacing: 12
             ) {
                 movementMetric(
                     title: "Steps",
@@ -680,16 +1333,6 @@ struct TrendsView: View {
                 )
 
                 movementMetric(
-                    title: "Active energy",
-                    value:
-                        formattedOptional(
-                            averageActiveEnergy,
-                            digits: 0,
-                            suffix: " kcal"
-                        )
-                )
-
-                movementMetric(
                     title: "Distance",
                     value:
                         formattedOptional(
@@ -698,26 +1341,68 @@ struct TrendsView: View {
                             suffix: " km"
                         )
                 )
+
+                movementMetric(
+                    title: "Active energy",
+                    value:
+                        formattedOptional(
+                            averageActiveEnergy,
+                            digits: 0,
+                            suffix: " kcal"
+                        )
+                )
             }
         }
     }
-
     private func movementMetric(
         title: String,
         value: String
     ) -> some View {
         VStack(
             alignment: .leading,
-            spacing: 5
+            spacing: 6
         ) {
             Text(value)
-                .font(.title3)
+                .font(.title2)
                 .fontWeight(.semibold)
+                .fontWidth(.condensed)
+                .foregroundStyle(.primary)
+                .minimumScaleFactor(0.75)
+                .lineLimit(1)
 
             Text(title)
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
+        .frame(
+            maxWidth: .infinity,
+            minHeight: 72,
+            alignment: .leading
+        )
+        .padding(18)
+        .background(
+            ActivityTheme.surface,
+            in: RoundedRectangle(
+                cornerRadius: 20,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 20,
+                style: .continuous
+            )
+            .stroke(
+                ActivityTheme.divider,
+                lineWidth: 0.75
+            )
+        }
+        .accessibilityElement(
+            children: .combine
+        )
+        .accessibilityLabel(
+            title + ", " + value
+        )
     }
 
     private func chartHeading(
@@ -830,45 +1515,137 @@ struct TrendsView: View {
         HStack(spacing: 14) {
             Image(
                 systemName:
-                    workout.workoutRole
-                        .includesStrength
-                    ? "dumbbell"
-                    : "figure.run"
+                    workoutSymbol(workout)
             )
-            .frame(width: 26)
+            .font(.body)
             .foregroundStyle(
                 ActivityTheme.accent
+            )
+            .frame(
+                width: 44,
+                height: 44
+            )
+            .background(
+                ActivityTheme
+                    .accent
+                    .opacity(0.10),
+                in: RoundedRectangle(
+                    cornerRadius: 12,
+                    style: .continuous
+                )
             )
 
             VStack(
                 alignment: .leading,
                 spacing: 4
             ) {
-                Text(workoutTitle(workout))
-                    .font(.body)
-                    .fontWeight(.medium)
+                Text(
+                    workoutTitle(workout)
+                )
+                .font(.body)
+                .fontWeight(.medium)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
 
                 Text(
-                    workout.startDate.formatted(
-                        date: .abbreviated,
-                        time: .omitted
-                    )
+                    workoutDateText(workout)
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
             Text(
-                "\(Int(workout.durationMinutes.rounded())) min"
+                String(
+                    max(
+                        0,
+                        Int(
+                            workout
+                                .durationMinutes
+                                .rounded()
+                        )
+                    )
+                )
+                + " min"
             )
             .font(.subheadline)
             .fontWeight(.semibold)
+            .foregroundStyle(.primary)
         }
-        .padding(.vertical, 13)
+        .padding(
+            .vertical,
+            13
+        )
+        .contentShape(Rectangle())
+        .accessibilityElement(
+            children: .combine
+        )
+    }
+    
+    private func workoutDateText(
+        _ workout: StoredWorkout
+    ) -> String {
+        if Calendar.current.isDateInToday(
+            workout.startDate
+        ) {
+            return "Today · "
+                + workout.startDate.formatted(
+                    date: .omitted,
+                    time: .shortened
+                )
+        }
+
+        return workout.startDate.formatted(
+            .dateTime
+                .weekday(.abbreviated)
+                .day()
+                .month(.abbreviated)
+        )
     }
 
+    
+    private func workoutSymbol(
+        _ workout: StoredWorkout
+    ) -> String {
+        guard let activityType =
+            WorkoutTypeCatalog.definition(
+                forRawValue:
+                    workout
+                        .activityTypeRawValue
+            )?.activityType
+        else {
+            return workout
+                .workoutRole
+                .includesStrength
+                ? "dumbbell"
+                : "figure.run"
+        }
+
+        switch activityType {
+        case .walking:
+            return "figure.walk"
+
+        case .running:
+            return "figure.run"
+
+        case .cycling:
+            return "bicycle"
+
+        case .traditionalStrengthTraining,
+             .functionalStrengthTraining,
+             .coreTraining:
+            return "dumbbell"
+
+        default:
+            return workout
+                .workoutRole
+                .includesStrength
+                ? "dumbbell"
+                : "figure.run"
+        }
+    }
+    
     private func workoutTitle(
         _ workout: StoredWorkout
     ) -> String {
