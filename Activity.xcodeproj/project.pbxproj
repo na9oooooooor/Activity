@@ -6,7 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		7017B201306EC2A600B2A96F /* Enough.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 7017B200306EC2A600B2A96F /* Enough.storekit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
+		7017B200306EC2A600B2A96F /* Enough.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Enough.storekit; sourceTree = "<group>"; };
 		7039562730693EE100825B7D /* Activity.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Activity.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -56,6 +61,7 @@
 		7039561E30693EE100825B7D = {
 			isa = PBXGroup;
 			children = (
+				7017B200306EC2A600B2A96F /* Enough.storekit */,
 				7039562930693EE100825B7D /* Activity */,
 				7039562830693EE100825B7D /* Products */,
 			);
@@ -133,6 +139,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7017B201306EC2A600B2A96F /* Enough.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

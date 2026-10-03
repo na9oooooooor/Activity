@@ -90,6 +90,9 @@ private struct TrendWeekCoverage:
 }
 
 struct TrendsView: View {
+    @Bindable var purchases:
+        PurchaseManager
+
     let healthKit: HealthKitService
     let onWorkoutsChanged: () -> Void
     let onShowSettings: () -> Void
@@ -113,12 +116,39 @@ struct TrendsView: View {
         [AppSettings]
 
     @State private var period:
-        TrendPeriod = .thirtyDays
+        TrendPeriod = .sevenDays
+
+    @State private var showingPaywall = false
+
+    @State private var pendingPeriod:
+        TrendPeriod?
     
     private var recentWorkouts:
         [StoredWorkout] {
 
         Array(allWorkouts.prefix(3))
+    }
+    
+    private var periodSelection:
+        Binding<TrendPeriod> {
+
+        Binding(
+            get: {
+                period
+            },
+            set: { selectedPeriod in
+                if selectedPeriod == .sevenDays
+                    || purchases.hasPlusAccess {
+
+                    period = selectedPeriod
+                } else {
+                    pendingPeriod =
+                        selectedPeriod
+
+                    showingPaywall = true
+                }
+            }
+        )
     }
     
     private var settings: AppSettings? {
@@ -396,6 +426,19 @@ struct TrendsView: View {
     private var dailyAerobicPace: Double {
         targets.aerobicMinimumMinutes / 7
     }
+    
+    private var aerobicBarWidth: CGFloat {
+        switch period {
+        case .sevenDays:
+            return 22
+
+        case .thirtyDays:
+            return 8
+
+        case .ninetyDays:
+            return 3
+        }
+    }
 
     private var averageSteps: Double? {
         average(
@@ -610,8 +653,25 @@ struct TrendsView: View {
             ActivityTheme.background
                 .ignoresSafeArea()
         )
+        .sheet(
+            isPresented: $showingPaywall,
+            onDismiss: {
+                applyPendingPeriod()
+            }
+        ) {
+            EnoughPlusView(
+                purchases: purchases
+            )
+            .presentationDetents([
+                .large
+            ])
+            .presentationDragIndicator(
+                .visible
+            )
+        }
 
     }
+    
 
     private var header: some View {
         HStack(
@@ -680,13 +740,26 @@ struct TrendsView: View {
     private var periodPicker: some View {
         Picker(
             "Period",
-            selection: $period
+            selection: periodSelection
         ) {
             ForEach(
                 TrendPeriod.allCases
-            ) { period in
-                Text(period.rawValue)
-                    .tag(period)
+            ) { option in
+                HStack(spacing: 4) {
+                    Text(option.rawValue)
+
+                    if option != .sevenDays
+                        && !purchases
+                            .hasPlusAccess {
+
+                        Image(
+                            systemName:
+                                "lock.fill"
+                        )
+                        .font(.caption2)
+                    }
+                }
+                .tag(option)
             }
         }
         .pickerStyle(.segmented)
@@ -830,28 +903,50 @@ struct TrendsView: View {
             alignment: .leading,
             spacing: 16
         ) {
-            chartHeading(
-                title: "Aerobic activity",
-                detail: "Moderate-equivalent minutes"
-            )
+            VStack(
+                alignment: .leading,
+                spacing: 4
+            ) {
+                Text("Aerobic activity")
+                    .font(.title3)
+                    .fontWeight(.semibold)
 
-            Chart(records) { record in
-                BarMark(
-                    x: .value(
-                        "Day",
-                        record.dayStart,
-                        unit: .day
-                    ),
-                    y: .value(
-                        "Minutes",
-                        record
-                            .guidelineModerateEquivalentMinutes
+                Text(
+                    """
+                    Daily · moderate-equivalent minutes
+                    """
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+
+            Chart {
+                ForEach(
+                    records,
+                    id: \.dayStart
+                ) { record in
+                    BarMark(
+                        x: .value(
+                            "Day",
+                            record.dayStart,
+                            unit: .day
+                        ),
+                        y: .value(
+                            "Minutes",
+                            record
+                                .guidelineModerateEquivalentMinutes
+                        ),
+                        width: .fixed(
+                            aerobicBarWidth
+                        )
                     )
-                )
-                .foregroundStyle(
-                    ActivityTheme.accent
-                )
-                .cornerRadius(3)
+                    .foregroundStyle(
+                        ActivityTheme
+                            .accent
+                            .opacity(0.52)
+                    )
+                    .cornerRadius(4)
+                }
 
                 RuleMark(
                     y: .value(
@@ -860,41 +955,53 @@ struct TrendsView: View {
                     )
                 )
                 .foregroundStyle(
-                    Color.secondary.opacity(0.55)
+                    Color.secondary
+                        .opacity(0.55)
                 )
                 .lineStyle(
                     StrokeStyle(
                         lineWidth: 1,
-                        dash: [4, 4]
+                        dash: [3, 3]
                     )
                 )
+                .annotation(
+                    position: .top,
+                    alignment: .trailing
+                ) {
+                    Text(
+                        formatted(
+                            dailyAerobicPace,
+                            digits: 0
+                        )
+                        + " min/day pace"
+                    )
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                }
             }
             .chartXAxis {
                 trendXAxis
             }
-            .chartYAxis {
-                AxisMarks(
-                    position: .leading
-                ) {
-                    AxisGridLine()
-                        .foregroundStyle(
-                            ActivityTheme.divider
-                        )
-
-                    AxisValueLabel()
-                }
-            }
+            .chartYAxis(.hidden)
             .frame(height: 190)
+            .accessibilityLabel(
+                """
+                Daily moderate-equivalent aerobic minutes for \(period.title)
+                """
+            )
 
             Text(
                 """
-                The dashed line is the weekly target divided \
-                by seven. It is a pace reference, not a daily \
-                requirement.
+                The dashed line is the weekly target divided by seven. A pace reference, not a daily requirement.
                 """
             )
             .font(.caption)
             .foregroundStyle(.secondary)
+            .fixedSize(
+                horizontal: false,
+                vertical: true
+            )
         }
     }
 
@@ -1354,6 +1461,21 @@ struct TrendsView: View {
             }
         }
     }
+    
+    private func applyPendingPeriod() {
+        defer {
+            pendingPeriod = nil
+        }
+
+        guard purchases.hasPlusAccess,
+              let pendingPeriod
+        else {
+            return
+        }
+
+        period = pendingPeriod
+    }
+    
     private func movementMetric(
         title: String,
         value: String

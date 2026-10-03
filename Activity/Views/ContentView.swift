@@ -14,6 +14,10 @@ struct ContentView: View {
     @State private var showingExplanation = false
     @State private var selectedTab: AppTab = .today
     @State private var showingSettings = false
+    @State private var showingSettingsPaywall =
+        false
+    @State private var purchases =
+        PurchaseManager()
     @Query private var savedSettings:
         [AppSettings]
 
@@ -47,6 +51,7 @@ struct ContentView: View {
             
             NavigationStack {
                 TrendsView(
+                    purchases: purchases,
                     healthKit: healthKit,
                     onWorkoutsChanged: {
                         dashboard.loadStoredData(
@@ -76,6 +81,21 @@ struct ContentView: View {
         .stableTabBar()
         .task {
             await prepareDashboard()
+        }
+        .task {
+            await purchases.prepare()
+
+        #if DEBUG
+            print(
+                "STOREKIT PRODUCTS:",
+                purchases.products.map(\.id)
+            )
+
+            print(
+                "ENOUGH PLUS ACTIVE:",
+                purchases.hasPlusAccess
+            )
+        #endif
         }
         .onChange(
             of: scenePhase
@@ -582,19 +602,189 @@ struct ContentView: View {
             )
         }
     }
+    private var activePlusPlanTitle: String {
+        if purchases.purchasedProductIDs.contains(
+            EnoughProductID.lifetime.rawValue
+        ) {
+            return "Lifetime"
+        }
+
+        if purchases.purchasedProductIDs.contains(
+            EnoughProductID.yearly.rawValue
+        ) {
+            return "Yearly"
+        }
+
+        if purchases.purchasedProductIDs.contains(
+            EnoughProductID.monthly.rawValue
+        ) {
+            return "Monthly"
+        }
+
+        return "Active"
+    }
+
+    private var hasRenewingPlusSubscription:
+        Bool {
+
+        purchases.purchasedProductIDs.contains(
+            EnoughProductID.yearly.rawValue
+        )
+        || purchases.purchasedProductIDs.contains(
+            EnoughProductID.monthly.rawValue
+        )
+    }
     
+    private func lockedSettingsRow(
+        title: String,
+        systemImage: String
+    ) -> some View {
+        HStack(spacing: 12) {
+            Label(
+                title,
+                systemImage: systemImage
+            )
+
+            Spacer()
+
+            Text("PLUS")
+                .font(
+                    .caption2.weight(.bold)
+                )
+                .foregroundStyle(
+                    ActivityTheme.accent
+                )
+                .padding(
+                    .horizontal,
+                    7
+                )
+                .padding(
+                    .vertical,
+                    3
+                )
+                .background(
+                    ActivityTheme.accent
+                        .opacity(0.12),
+                    in: Capsule()
+                )
+
+            Image(systemName: "lock.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .foregroundStyle(.primary)
+        .contentShape(Rectangle())
+    }
         private var settingsSheet:
             some View {
 
         NavigationStack {
             Form {
+                Section {
+                    if purchases.hasPlusAccess {
+                        Label {
+                            VStack(
+                                alignment: .leading,
+                                spacing: 3
+                            ) {
+                                Text("Enough Plus active")
+                                    .foregroundStyle(
+                                        .primary
+                                    )
+
+                                Text(activePlusPlanTitle)
+                                    .font(.footnote)
+                                    .foregroundStyle(
+                                        .secondary
+                                    )
+                            }
+                        } icon: {
+                            Image(
+                                systemName:
+                                    "checkmark.seal.fill"
+                            )
+                            .foregroundStyle(
+                                ActivityTheme.success
+                            )
+                        }
+
+                        if hasRenewingPlusSubscription {
+                            Link(
+                                destination: URL(
+                                    string:
+                                        "https://apps.apple.com/account/subscriptions"
+                                )!
+                            ) {
+                                Label(
+                                    "Manage Subscription",
+                                    systemImage:
+                                        "person.crop.circle"
+                                )
+                            }
+                        }
+                    } else {
+                        Button {
+                            showingSettingsPaywall = true
+                        } label: {
+                            HStack {
+                                Label(
+                                    "Explore Enough Plus",
+                                    systemImage:
+                                        "sparkles"
+                                )
+
+                                Spacer()
+
+                                Text("See plans")
+                                    .font(.subheadline)
+                                    .foregroundStyle(
+                                        .secondary
+                                    )
+                            }
+                        }
+                    }
+
+                    Button {
+                        Task {
+                            await purchases
+                                .restorePurchases()
+                        }
+                    } label: {
+                        Label(
+                            "Restore Purchases",
+                            systemImage:
+                                "arrow.clockwise"
+                        )
+                    }
+
+                    if let error =
+                        purchases.errorMessage {
+
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundStyle(
+                                ActivityTheme.caution
+                            )
+                    }
+                } header: {
+                    Text("Enough Plus")
+                } footer: {
+                    Text(
+                        """
+                        Today recommendations and your 7-day progress \
+                        remain free.
+                        """
+                    )
+                }
+                
                 appleHealthSection
 
                 Section("Activity") {
                     NavigationLink {
                         GuidanceSettingsView {
                             dashboard.loadStoredData(
-                                modelContext: modelContext
+                                modelContext:
+                                    modelContext
                             )
                         }
                     } label: {
@@ -604,33 +794,55 @@ struct ContentView: View {
                                 "person.text.rectangle"
                         )
                     }
-                    NavigationLink {
-                        ActivityTargetSettingsView {
-                            dashboard
-                                .loadStoredData(
+
+                    if purchases.hasPlusAccess {
+                        NavigationLink {
+                            ActivityTargetSettingsView {
+                                dashboard.loadStoredData(
                                     modelContext:
                                         modelContext
                                 )
+                            }
+                        } label: {
+                            Label(
+                                "Activity Targets",
+                                systemImage: "target"
+                            )
                         }
-                    } label: {
-                        Label(
-                            "Activity Targets",
-                            systemImage:
-                                "target"
-                        )
+                    } else {
+                        Button {
+                            showingSettingsPaywall = true
+                        } label: {
+                            lockedSettingsRow(
+                                title: "Activity Targets",
+                                systemImage: "target"
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
 
-                    NavigationLink {
-                        ActivityDaySettingsView(
-                            healthKit: healthKit,
-                            dashboard: dashboard
-                        )
-                    } label: {
-                        Label(
-                            "Activity Day",
-                            systemImage:
-                                "clock"
-                        )
+                    if purchases.hasPlusAccess {
+                        NavigationLink {
+                            ActivityDaySettingsView(
+                                healthKit: healthKit,
+                                dashboard: dashboard
+                            )
+                        } label: {
+                            Label(
+                                "Activity Day",
+                                systemImage: "clock"
+                            )
+                        }
+                    } else {
+                        Button {
+                            showingSettingsPaywall = true
+                        } label: {
+                            lockedSettingsRow(
+                                title: "Activity Day",
+                                systemImage: "clock"
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                
@@ -686,6 +898,20 @@ struct ContentView: View {
                         showingSettings = false
                     }
                 }
+            }
+            .sheet(
+                isPresented:
+                    $showingSettingsPaywall
+            ) {
+                EnoughPlusView(
+                    purchases: purchases
+                )
+                .presentationDetents([
+                    .large
+                ])
+                .presentationDragIndicator(
+                    .visible
+                )
             }
         }
     }
