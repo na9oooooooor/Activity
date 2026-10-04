@@ -704,6 +704,12 @@ final class ActivityRepository {
                 value: -1,
                 to: todayStart
             ),
+            let expiringSoonEnd =
+                calendar.date(
+                    byAdding: .day,
+                    value: 2,
+                    to: windowStart
+                ),
       
             let comparisonCurrentStart =
                 calendar.date(
@@ -816,7 +822,27 @@ final class ActivityRepository {
         let strengthDays = records.filter {
             $0.isStrengthDay
         }.count
+        let expiringSoonRecords =
+            records.filter { record in
+                record.dayStart
+                    < expiringSoonEnd
+            }
 
+        let aerobicMinutesExpiringSoon =
+            expiringSoonRecords.reduce(0) {
+                result,
+                record in
+
+                result
+                    + record
+                        .guidelineModerateEquivalentMinutes
+            }
+
+        let strengthDaysExpiringSoon =
+            expiringSoonRecords.filter {
+                $0.isStrengthDay
+            }.count
+        
         let strengthRecordedTodayOrYesterday =
             records.contains { record in
                 record.dayStart >= yesterdayStart
@@ -847,7 +873,11 @@ final class ActivityRepository {
             aerobicMinutesCompletedToday:
                 todayRecord?.moderateEquivalentMinutes ?? 0,
             recordedStepsToday:
-                todayRecord?.recordedSteps
+                todayRecord?.recordedSteps,
+            aerobicMinutesExpiringSoon:
+                aerobicMinutesExpiringSoon,
+            strengthDaysExpiringSoon:
+                strengthDaysExpiringSoon
         )
 
         let storedCheckIn = try fetchCheckIn(

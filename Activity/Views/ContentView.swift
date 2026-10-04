@@ -14,19 +14,15 @@ struct ContentView: View {
     @State private var showingExplanation = false
     @State private var selectedTab: AppTab = .today
     @State private var showingSettings = false
-    @State private var showingSettingsPaywall =
-        false
-    @State private var purchases =
-        PurchaseManager()
-    @Query private var savedSettings:
-        [AppSettings]
+    @State private var showingSettingsPaywall = false
+    @State private var purchases = PurchaseManager()
+    @State private var showingTodayPaywall = false
+    
+    @Query private var savedSettings: [AppSettings]
 
-    @Environment(\.modelContext)
-    private var modelContext
-    @Environment(\.scenePhase)
-    private var scenePhase
-    private var onboardingPresented:
-        Binding<Bool> {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+    private var onboardingPresented: Binding<Bool> {
 
         Binding(
             get: {
@@ -109,6 +105,9 @@ struct ContentView: View {
             }
 
             Task {
+                await purchases
+                    .refreshEntitlements()
+
                 await prepareDashboard()
             }
         }
@@ -145,6 +144,20 @@ struct ContentView: View {
                     await prepareDashboard()
                 }
             }
+        }
+        .sheet(
+            isPresented:
+                $showingTodayPaywall
+        ) {
+            EnoughPlusView(
+                purchases: purchases
+            )
+            .presentationDetents([
+                .large
+            ])
+            .presentationDragIndicator(
+                .visible
+            )
         }
         .sheet(
             isPresented:
@@ -562,6 +575,8 @@ struct ContentView: View {
                         assessment: assessment,
                         todayContext:
                             dashboard.todayContext,
+                        hasPlusAccess:
+                            purchases.hasPlusAccess,
                         recommendationReason:
                             reasonText(
                                 for: assessment
@@ -571,6 +586,9 @@ struct ContentView: View {
                         },
                         onShowSettings: {
                             showingSettings = true
+                        },
+                        onShowPaywall: {
+                            showingTodayPaywall = true
                         },
                         onRefresh: {
                             await refreshDashboard()
@@ -1019,7 +1037,12 @@ struct ContentView: View {
             Your recorded aerobic and strength targets \
             are met.
             """
-
+        case .activityExpiringSoon:
+            return """
+            Some currently counted activity will leave your rolling \
+            seven-day window within two days.
+            """
+            
         case .aerobicGap:
             return """
             A substantial aerobic gap remains in the \

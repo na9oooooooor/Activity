@@ -653,6 +653,16 @@ struct TrendsView: View {
             ActivityTheme.background
                 .ignoresSafeArea()
         )
+        .onChange(
+            of: purchases.hasPlusAccess
+        ) { _, hasPlusAccess in
+            guard !hasPlusAccess else {
+                return
+            }
+
+            period = .sevenDays
+            pendingPeriod = nil
+        }
         .sheet(
             isPresented: $showingPaywall,
             onDismiss: {

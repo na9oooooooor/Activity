@@ -18,10 +18,11 @@ struct TodayDashboardView: View {
 
     let todayContext:
         TodayContextSelection
-
+    let hasPlusAccess: Bool
     let recommendationReason: String
     let onShowExplanation: () -> Void
     let onShowSettings: () -> Void
+    let onShowPaywall: () -> Void
     let onRefresh: () async -> Void
     let onContextChange:
         (TodayContextSelection) -> Void
@@ -53,6 +54,9 @@ struct TodayDashboardView: View {
         case .targetsMet,
              .aerobicSessionAlreadyCompleted:
             return "pebble_enough"
+            
+        case .activityExpiringSoon:
+            return "pebble_movement"
 
         case .recoveryChoice:
             return "pebble_recovery"
@@ -506,6 +510,12 @@ struct TodayDashboardView: View {
             return """
             You’ve done enough for your current targets.
             """
+            
+        case .activityExpiringSoon:
+            return """
+            Some activity today would replace activity leaving your \
+            seven-day window soon.
+            """
 
         case .aerobicGap:
             return """
@@ -815,15 +825,46 @@ struct TodayDashboardView: View {
 
     private var comparisonRow: some View {
         Button {
-            presentedSheet = .comparison
+            if hasPlusAccess {
+                presentedSheet = .comparison
+            } else {
+                onShowPaywall()
+            }
         } label: {
             VStack(
                 alignment: .leading,
                 spacing: 10
             ) {
-                ActivitySectionLabel(
-                    title: "Compared with you"
-                )
+                HStack {
+                    ActivitySectionLabel(
+                        title: "Compared with you"
+                    )
+
+                    Spacer()
+
+                    if !hasPlusAccess {
+                        Text("PLUS")
+                            .font(
+                                .caption2.weight(.bold)
+                            )
+                            .foregroundStyle(
+                                ActivityTheme.accent
+                            )
+                            .padding(
+                                .horizontal,
+                                7
+                            )
+                            .padding(
+                                .vertical,
+                                3
+                            )
+                            .background(
+                                ActivityTheme.accent
+                                    .opacity(0.12),
+                                in: Capsule()
+                            )
+                    }
+                }
 
                 HStack(
                     alignment: .center,
@@ -833,26 +874,48 @@ struct TodayDashboardView: View {
                         alignment: .leading,
                         spacing: 4
                     ) {
-                        Text(comparisonSummary)
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.primary)
-                            .fixedSize(
-                                horizontal: false,
-                                vertical: true
-                            )
+                        Text(
+                            hasPlusAccess
+                            ? comparisonSummary
+                            : "See your personal activity pattern"
+                        )
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                        .fixedSize(
+                            horizontal: false,
+                            vertical: true
+                        )
 
-                        if let detail = comparisonDetail {
-                            Text(detail)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                        if hasPlusAccess {
+                            if let detail =
+                                comparisonDetail {
+
+                                Text(detail)
+                                    .font(.subheadline)
+                                    .foregroundStyle(
+                                        .secondary
+                                    )
+                            }
+                        } else {
+                            Text(
+                                """
+                                Compare your last 7 days with \
+                                your usual 90-day baseline.
+                                """
+                            )
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                         }
                     }
 
                     Spacer(minLength: 12)
 
                     Image(
-                        systemName: "chevron.right"
+                        systemName:
+                            hasPlusAccess
+                            ? "chevron.right"
+                            : "lock.fill"
                     )
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -863,7 +926,9 @@ struct TodayDashboardView: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint(
-            "Opens your personal baseline details"
+            hasPlusAccess
+            ? "Opens your personal baseline details"
+            : "Opens Enough Plus"
         )
     }
 

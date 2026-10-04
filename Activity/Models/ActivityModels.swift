@@ -87,6 +87,9 @@ struct ActivitySnapshot: Equatable, Sendable {
 
     var recordedStepsToday: Int?
 
+    var aerobicMinutesExpiringSoon: Double
+    var strengthDaysExpiringSoon: Int
+
     init(
         moderateMinutes: Double = 0,
         vigorousMinutes: Double = 0,
@@ -99,7 +102,9 @@ struct ActivitySnapshot: Equatable, Sendable {
         isInsideGuidedScope: Bool = true,
         strengthRecordedTodayOrYesterday: Bool = false,
         aerobicMinutesCompletedToday: Double = 0,
-        recordedStepsToday: Int? = nil
+        recordedStepsToday: Int? = nil,
+        aerobicMinutesExpiringSoon: Double = 0,
+        strengthDaysExpiringSoon: Int = 0
     ) {
         self.moderateMinutes = max(0, moderateMinutes)
         self.vigorousMinutes = max(0, vigorousMinutes)
@@ -126,6 +131,17 @@ struct ActivitySnapshot: Equatable, Sendable {
 
         self.recordedStepsToday =
             recordedStepsToday.map { max(0, $0) }
+        self.aerobicMinutesExpiringSoon =
+            max(
+                0,
+                aerobicMinutesExpiringSoon
+            )
+
+        self.strengthDaysExpiringSoon =
+            max(
+                0,
+                strengthDaysExpiringSoon
+            )
     }
 
     var moderateEquivalentMinutes: Double {
@@ -174,6 +190,7 @@ enum TodayOutcome: String, Sendable {
 
 enum DecisionReason: String, Sendable {
     case targetsMet
+    case activityExpiringSoon
     case aerobicGap
     case strengthGap
     case smallRemainingGap
@@ -185,6 +202,7 @@ enum DecisionReason: String, Sendable {
     case staleRecords
     case importing
     case outsideGuidedScope
+    
 }
 
 enum WorkoutIntensityChoice:

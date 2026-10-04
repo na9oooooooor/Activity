@@ -107,6 +107,39 @@ enum ActivityRules {
                 reason: .outsideGuidedScope
             )
         }
+        let aerobicMinutesAfterExpiry =
+            max(
+                0,
+                snapshot.moderateEquivalentMinutes
+                    - snapshot.aerobicMinutesExpiringSoon
+            )
+
+        let strengthDaysAfterExpiry =
+            max(
+                0,
+                snapshot.strengthDays
+                    - snapshot.strengthDaysExpiringSoon
+            )
+
+        let aerobicTargetAtRisk =
+            aerobicTargetMet
+            && aerobicMinutesAfterExpiry
+                < configuration.aerobicTargetMinutes
+
+        let strengthTargetAtRisk =
+            strengthTargetMet
+            && strengthDaysAfterExpiry
+                < configuration.strengthTargetDays
+
+        if targetsMet
+            && (aerobicTargetAtRisk
+                || strengthTargetAtRisk) {
+
+            return TodayRecommendation(
+                outcome: .activityRecommended,
+                reason: .activityExpiringSoon
+            )
+        }
 
         switch snapshot.recordState {
         case .unavailable:
