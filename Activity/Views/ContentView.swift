@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import StoreKit
 
 
 private enum AppTab: Hashable {
@@ -883,21 +884,13 @@ struct ContentView: View {
                 }
 
                 Section("About") {
-                    if let input =
-                        dashboard.input,
-                       let assessment =
-                        dashboard.assessment {
-
-                        Button {
-                            showingExplanation =
-                                true
-                        } label: {
-                            Label(
-                                "How Activity Health Works",
-                                systemImage:
-                                    "info.circle"
-                            )
-                        }
+                    NavigationLink {
+                        HowEnoughWorksView()
+                    } label: {
+                        Label(
+                            "How Enough Works",
+                            systemImage: "info.circle"
+                        )
                     }
 
                     LabeledContent(
@@ -1037,10 +1030,28 @@ struct ContentView: View {
             Your recorded aerobic and strength targets \
             are met.
             """
-        case .activityExpiringSoon:
+        case .aerobicCoverageExpiringSoon:
             return """
-            Some currently counted activity will leave your rolling \
-            seven-day window within two days.
+            Enough aerobic activity will leave your rolling \
+            seven-day window soon to put the target at risk.
+            """
+
+        case .strengthCoverageExpiringSoon:
+            return """
+            At least one counted strength day will leave your \
+            rolling seven-day window soon.
+            """
+            
+        case .movementBelowUsual:
+            return """
+            Your average steps across the last seven completed \
+            days are substantially below your usual level.
+            """
+
+        case .bothTargetsExpiringSoon:
+            return """
+            Aerobic activity and a strength day will leave your \
+            rolling seven-day window soon.
             """
             
         case .aerobicGap:

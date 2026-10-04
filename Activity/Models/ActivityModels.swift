@@ -86,9 +86,11 @@ struct ActivitySnapshot: Equatable, Sendable {
     var aerobicMinutesCompletedToday: Double
 
     var recordedStepsToday: Int?
-
+    var recentAverageSteps: Double?
+    var usualAverageSteps: Double?
     var aerobicMinutesExpiringSoon: Double
     var strengthDaysExpiringSoon: Int
+    var daysSinceLastTargetActivity: Int?
 
     init(
         moderateMinutes: Double = 0,
@@ -103,8 +105,11 @@ struct ActivitySnapshot: Equatable, Sendable {
         strengthRecordedTodayOrYesterday: Bool = false,
         aerobicMinutesCompletedToday: Double = 0,
         recordedStepsToday: Int? = nil,
+        recentAverageSteps: Double? = nil,
+        usualAverageSteps: Double? = nil,
         aerobicMinutesExpiringSoon: Double = 0,
-        strengthDaysExpiringSoon: Int = 0
+        strengthDaysExpiringSoon: Int = 0,
+        daysSinceLastTargetActivity: Int? = nil
     ) {
         self.moderateMinutes = max(0, moderateMinutes)
         self.vigorousMinutes = max(0, vigorousMinutes)
@@ -131,6 +136,15 @@ struct ActivitySnapshot: Equatable, Sendable {
 
         self.recordedStepsToday =
             recordedStepsToday.map { max(0, $0) }
+        self.recentAverageSteps =
+            recentAverageSteps.map {
+                max(0, $0)
+            }
+
+        self.usualAverageSteps =
+            usualAverageSteps.map {
+                max(0, $0)
+            }
         self.aerobicMinutesExpiringSoon =
             max(
                 0,
@@ -142,6 +156,10 @@ struct ActivitySnapshot: Equatable, Sendable {
                 0,
                 strengthDaysExpiringSoon
             )
+        self.daysSinceLastTargetActivity =
+            daysSinceLastTargetActivity.map {
+                max(0, $0)
+            }
     }
 
     var moderateEquivalentMinutes: Double {
@@ -190,7 +208,9 @@ enum TodayOutcome: String, Sendable {
 
 enum DecisionReason: String, Sendable {
     case targetsMet
-    case activityExpiringSoon
+    case aerobicCoverageExpiringSoon
+    case strengthCoverageExpiringSoon
+    case bothTargetsExpiringSoon
     case aerobicGap
     case strengthGap
     case smallRemainingGap
@@ -202,7 +222,7 @@ enum DecisionReason: String, Sendable {
     case staleRecords
     case importing
     case outsideGuidedScope
-    
+    case movementBelowUsual
 }
 
 enum WorkoutIntensityChoice:

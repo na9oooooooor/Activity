@@ -7,14 +7,50 @@ struct ActivityRuleConfiguration: Equatable, Sendable {
 
     let workoutPromptGapMinutes: Double
     let completedSessionThresholdMinutes: Double
+    let movementComparisonRatio: Double
+    let movementContextCeilingSteps: Double
+    
+    init(
+        aerobicTargetMinutes: Double,
+        upperAerobicReferenceMinutes: Double,
+        strengthTargetDays: Int,
+        workoutPromptGapMinutes: Double,
+        completedSessionThresholdMinutes: Double,
+        movementComparisonRatio: Double = 0.70,
+        movementContextCeilingSteps: Double = 7_000
+    ) {
+        self.aerobicTargetMinutes =
+            aerobicTargetMinutes
 
-    static let version1 = ActivityRuleConfiguration(
-        aerobicTargetMinutes: 150,
-        upperAerobicReferenceMinutes: 300,
-        strengthTargetDays: 2,
-        workoutPromptGapMinutes: 30,
-        completedSessionThresholdMinutes: 20
-    )
+        self.upperAerobicReferenceMinutes =
+            upperAerobicReferenceMinutes
+
+        self.strengthTargetDays =
+            strengthTargetDays
+
+        self.workoutPromptGapMinutes =
+            workoutPromptGapMinutes
+
+        self.completedSessionThresholdMinutes =
+            completedSessionThresholdMinutes
+
+        self.movementComparisonRatio =
+            movementComparisonRatio
+
+        self.movementContextCeilingSteps =
+            movementContextCeilingSteps
+    }
+    
+    static let version1 =
+        ActivityRuleConfiguration(
+            aerobicTargetMinutes: 150,
+            upperAerobicReferenceMinutes: 300,
+            strengthTargetDays: 2,
+            workoutPromptGapMinutes: 30,
+            completedSessionThresholdMinutes: 20,
+            movementComparisonRatio: 0.70,
+            movementContextCeilingSteps: 7_000
+        )
 }
 
 extension ActivityRuleConfiguration {
@@ -32,7 +68,9 @@ extension ActivityRuleConfiguration {
             workoutPromptGapMinutes:
                 30,
             completedSessionThresholdMinutes:
-                20
+                20,
+            movementComparisonRatio: 0.70,
+            movementContextCeilingSteps: 7_000
         )
     }
 }
@@ -44,34 +82,34 @@ enum ActivityRules {
         configuration: ActivityRuleConfiguration = .version1
     ) -> ActivityAssessment {
         let aerobicMinutes = snapshot.moderateEquivalentMinutes
-
+        
         let aerobicTargetMet =
-            aerobicMinutes >= configuration.aerobicTargetMinutes
-
+        aerobicMinutes >= configuration.aerobicTargetMinutes
+        
         let strengthTargetMet =
-            snapshot.strengthDays >= configuration.strengthTargetDays
-
+        snapshot.strengthDays >= configuration.strengthTargetDays
+        
         let targetsMet = aerobicTargetMet && strengthTargetMet
-
+        
         let status: ActivityHealthStatus
-
+        
         switch snapshot.recordState {
         case .importing:
             status = .updating
-
+            
         case .stale:
             status = .updating
-
+            
         case .unavailable:
             status = .unavailable
-
+            
         case .current:
             status =
-                targetsMet
-                ? .meetingTargets
-                : .belowTargets
+            targetsMet
+            ? .meetingTargets
+            : .belowTargets
         }
-
+        
         let recommendation = makeTodayRecommendation(
             snapshot: snapshot,
             checkIn: checkIn,
@@ -80,7 +118,7 @@ enum ActivityRules {
             strengthTargetMet: strengthTargetMet,
             configuration: configuration
         )
-
+        
         return ActivityAssessment(
             status: status,
             recommendation: recommendation,
@@ -88,11 +126,11 @@ enum ActivityRules {
             strengthTargetMet: strengthTargetMet,
             aboveAerobicReferenceRange:
                 targetsMet
-                && aerobicMinutes
-                    > configuration.upperAerobicReferenceMinutes
+            && aerobicMinutes
+            > configuration.upperAerobicReferenceMinutes
         )
     }
-
+    
     private static func makeTodayRecommendation(
         snapshot: ActivitySnapshot,
         checkIn: TodayCheckIn,
@@ -105,39 +143,6 @@ enum ActivityRules {
             return TodayRecommendation(
                 outcome: nil,
                 reason: .outsideGuidedScope
-            )
-        }
-        let aerobicMinutesAfterExpiry =
-            max(
-                0,
-                snapshot.moderateEquivalentMinutes
-                    - snapshot.aerobicMinutesExpiringSoon
-            )
-
-        let strengthDaysAfterExpiry =
-            max(
-                0,
-                snapshot.strengthDays
-                    - snapshot.strengthDaysExpiringSoon
-            )
-
-        let aerobicTargetAtRisk =
-            aerobicTargetMet
-            && aerobicMinutesAfterExpiry
-                < configuration.aerobicTargetMinutes
-
-        let strengthTargetAtRisk =
-            strengthTargetMet
-            && strengthDaysAfterExpiry
-                < configuration.strengthTargetDays
-
-        if targetsMet
-            && (aerobicTargetAtRisk
-                || strengthTargetAtRisk) {
-
-            return TodayRecommendation(
-                outcome: .activityRecommended,
-                reason: .activityExpiringSoon
             )
         }
 
@@ -172,22 +177,29 @@ enum ActivityRules {
         }
 
         if !strengthTargetMet
-            && !snapshot.strengthRecordedTodayOrYesterday {
+            && !snapshot
+                .strengthRecordedTodayOrYesterday {
+
             return TodayRecommendation(
                 outcome: .workoutRecommended,
                 reason: .strengthGap
             )
         }
 
-        let aerobicGap = max(
-            0,
-            configuration.aerobicTargetMinutes
-                - snapshot.moderateEquivalentMinutes
-        )
+        let aerobicGap =
+            max(
+                0,
+                configuration.aerobicTargetMinutes
+                    - snapshot
+                        .moderateEquivalentMinutes
+            )
 
-        if aerobicGap >= configuration.workoutPromptGapMinutes
+        if aerobicGap
+            >= configuration.workoutPromptGapMinutes
             && snapshot.aerobicMinutesCompletedToday
-                < configuration.completedSessionThresholdMinutes {
+                < configuration
+                    .completedSessionThresholdMinutes {
+
             return TodayRecommendation(
                 outcome: .workoutRecommended,
                 reason: .aerobicGap
@@ -203,11 +215,15 @@ enum ActivityRules {
             }
 
             if !aerobicTargetMet
-                && snapshot.aerobicMinutesCompletedToday
-                    >= configuration.completedSessionThresholdMinutes {
+                && snapshot
+                    .aerobicMinutesCompletedToday
+                    >= configuration
+                        .completedSessionThresholdMinutes {
+
                 return TodayRecommendation(
                     outcome: .activityRecommended,
-                    reason: .aerobicSessionAlreadyCompleted
+                    reason:
+                        .aerobicSessionAlreadyCompleted
                 )
             }
 
@@ -221,6 +237,79 @@ enum ActivityRules {
             return TodayRecommendation(
                 outcome: .activityRecommended,
                 reason: .lowMovement
+            )
+        }
+
+        let aerobicMinutesAfterExpiry =
+            max(
+                0,
+                snapshot
+                    .moderateEquivalentMinutes
+                    - snapshot
+                        .aerobicMinutesExpiringSoon
+            )
+
+        let strengthDaysAfterExpiry =
+            max(
+                0,
+                snapshot.strengthDays
+                    - snapshot
+                        .strengthDaysExpiringSoon
+            )
+
+        let aerobicTargetAtRisk =
+            aerobicTargetMet
+            && aerobicMinutesAfterExpiry
+                < configuration
+                    .aerobicTargetMinutes
+
+        let strengthTargetAtRisk =
+            strengthTargetMet
+            && strengthDaysAfterExpiry
+                < configuration
+                    .strengthTargetDays
+
+        if aerobicTargetAtRisk
+            && strengthTargetAtRisk {
+
+            return TodayRecommendation(
+                outcome: .activityRecommended,
+                reason: .bothTargetsExpiringSoon
+            )
+        }
+
+        if strengthTargetAtRisk {
+            return TodayRecommendation(
+                outcome: .activityRecommended,
+                reason:
+                    .strengthCoverageExpiringSoon
+            )
+        }
+
+        if aerobicTargetAtRisk {
+            return TodayRecommendation(
+                outcome: .activityRecommended,
+                reason:
+                    .aerobicCoverageExpiringSoon
+            )
+        }
+
+        if let recentAverageSteps =
+                snapshot.recentAverageSteps,
+           let usualAverageSteps =
+                snapshot.usualAverageSteps,
+           usualAverageSteps > 0,
+           recentAverageSteps
+                < usualAverageSteps
+                    * configuration
+                        .movementComparisonRatio,
+           recentAverageSteps
+                < configuration
+                    .movementContextCeilingSteps {
+
+            return TodayRecommendation(
+                outcome: .activityRecommended,
+                reason: .movementBelowUsual
             )
         }
 

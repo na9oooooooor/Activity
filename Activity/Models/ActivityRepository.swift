@@ -848,6 +848,25 @@ final class ActivityRepository {
                 record.dayStart >= yesterdayStart
                     && record.isStrengthDay
             }
+        let lastTargetActivityDay =
+            records
+                .filter { record in
+                    record
+                        .guidelineModerateEquivalentMinutes
+                        > 0
+                    || record.isStrengthDay
+                }
+                .map(\.dayStart)
+                .max()
+
+        let daysSinceLastTargetActivity =
+            lastTargetActivityDay.map { dayStart in
+                calendar.dateComponents(
+                    [.day],
+                    from: dayStart,
+                    to: todayStart
+                ).day ?? 0
+            }
 
         let todayRecord = records.first { record in
             record.dayKey == currentDayKey
@@ -874,6 +893,14 @@ final class ActivityRepository {
                 todayRecord?.moderateEquivalentMinutes ?? 0,
             recordedStepsToday:
                 todayRecord?.recordedSteps,
+            recentAverageSteps:
+                personalComparison
+                    .steps?
+                    .currentValue,
+            usualAverageSteps:
+                personalComparison
+                    .steps?
+                    .usualValue,
             aerobicMinutesExpiringSoon:
                 aerobicMinutesExpiringSoon,
             strengthDaysExpiringSoon:

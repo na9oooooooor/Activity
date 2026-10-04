@@ -107,7 +107,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2630;
+				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					7039562630693EE100825B7D = {
@@ -171,6 +171,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Activity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Enough;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Activity Health reads workouts and movement data to show weekly activity guidance and personal trends.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Activity Health saves workouts you add manually to Apple Health.";
@@ -221,6 +222,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Activity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Enough;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Activity Health reads workouts and movement data to show weekly activity guidance and personal trends.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Activity Health saves workouts you add manually to Apple Health.";

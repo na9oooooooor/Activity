@@ -33,30 +33,29 @@ struct TodayDashboardView: View {
     @State private var presentedSheet:
         TodayDashboardSheet?
     
-    private var pebbleAssetName:
-        String? {
-
+    private var pebbleAssetName: String? {
         switch assessment
             .recommendation
             .reason {
 
-        case .strengthGap:
+        case .strengthGap,
+             .strengthCoverageExpiringSoon:
             return "pebble_strength"
 
         case .aerobicGap,
-             .recentStrengthSession:
+             .recentStrengthSession,
+             .aerobicCoverageExpiringSoon:
             return "pebble_aerobic"
 
         case .smallRemainingGap,
-             .lowMovement:
+             .lowMovement,
+             .movementBelowUsual,
+             .bothTargetsExpiringSoon:
             return "pebble_movement"
 
         case .targetsMet,
              .aerobicSessionAlreadyCompleted:
             return "pebble_enough"
-            
-        case .activityExpiringSoon:
-            return "pebble_movement"
 
         case .recoveryChoice:
             return "pebble_recovery"
@@ -68,6 +67,8 @@ struct TodayDashboardView: View {
         case .staleRecords,
              .importing:
             return "pebble_updating"
+            
+            
         }
     }
 
@@ -501,6 +502,42 @@ struct TodayDashboardView: View {
         )
     }
     
+    private var aerobicMinutesNeededAfterExpiry:
+        Int {
+
+        let retainedMinutes =
+            max(
+                0,
+                input.snapshot
+                    .moderateEquivalentMinutes
+                    - input.snapshot
+                        .aerobicMinutesExpiringSoon
+            )
+
+        let neededMinutes =
+            max(
+                0,
+                input.targets
+                    .aerobicMinimumMinutes
+                    - retainedMinutes
+            )
+
+        return Int(
+            neededMinutes.rounded(.up)
+        )
+    }
+
+    private var aerobicReplacementText:
+        String {
+
+        let minutes =
+            aerobicMinutesNeededAfterExpiry
+
+        return minutes == 1
+            ? "1 moderate minute"
+            : "\(minutes) moderate minutes"
+    }
+    
     private var recommendationAction: String {
         switch assessment
             .recommendation
@@ -511,10 +548,23 @@ struct TodayDashboardView: View {
             You’ve done enough for your current targets.
             """
             
-        case .activityExpiringSoon:
+        case .aerobicCoverageExpiringSoon:
             return """
-            Some activity today would replace activity leaving your \
-            seven-day window soon.
+            About \(aerobicReplacementText) would keep your \
+            rolling week covered.
+            """
+
+        case .strengthCoverageExpiringSoon:
+            return """
+            One strength session would keep your rolling \
+            week covered.
+            """
+
+        case .bothTargetsExpiringSoon:
+            return """
+            One strength session and about \
+            \(aerobicReplacementText) would keep your \
+            rolling week covered.
             """
 
         case .aerobicGap:
@@ -571,6 +621,12 @@ struct TodayDashboardView: View {
         case .outsideGuidedScope:
             return """
             Today’s suggestion is unavailable for this profile.
+            """
+            
+        case .movementBelowUsual:
+            return """
+            Your recent movement is lower than usual. A comfortable \
+            walk would be enough today.
             """
         }
     }

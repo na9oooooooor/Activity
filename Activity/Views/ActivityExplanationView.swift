@@ -14,6 +14,7 @@ struct ActivityExplanationView: View {
                 statusSection
                 aerobicSection
                 strengthSection
+                rollingWindowSection
                 todaySection
                 baselineSection
                 methodSection
@@ -37,6 +38,51 @@ struct ActivityExplanationView: View {
         }
     }
 
+    private var rollingWindowSection:
+        some View {
+
+        Section("Rolling window") {
+            LabeledContent(
+                "Current window",
+                value:
+                    """
+                    \(shortDate(input.windowStart))–\
+                    \(shortDate(input.windowEnd))
+                    """
+            )
+
+            LabeledContent(
+                "Aerobic leaving soon",
+                value:
+                    """
+                    \(formatted(
+                        input.snapshot
+                            .aerobicMinutesExpiringSoon
+                    )) min
+                    """
+            )
+
+            LabeledContent(
+                "Strength days leaving soon",
+                value:
+                    input.snapshot
+                        .strengthDaysExpiringSoon
+                        .formatted()
+            )
+
+            Text(
+                """
+                “Leaving soon” means the activity is on one \
+                of the two oldest days in your current \
+                seven-day window. It will stop counting as \
+                the window moves forward.
+                """
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+    }
+    
     private var statusSection:
         some View {
 
@@ -157,7 +203,32 @@ struct ActivityExplanationView: View {
 
             Text(recommendationReason)
                 .foregroundStyle(.secondary)
+            if let days =
+                input.snapshot
+                    .daysSinceLastTargetActivity {
 
+                LabeledContent(
+                    "Last counted activity",
+                    value: recencyText(days)
+                )
+            } else if input.snapshot.recordState
+                        == .current {
+
+                LabeledContent(
+                    "Last counted activity",
+                    value: "None in the last 7 days"
+                )
+            }
+
+            Text(
+                """
+                Counted activity means aerobic minutes or a \
+                strength day. This is context, not a streak \
+                or an additional target.
+                """
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
             if input.checkIn.wantsRecovery {
                 LabeledContent(
                     "Your selection",
@@ -333,7 +404,32 @@ struct ActivityExplanationView: View {
             )
         )
     }
+    
+    private func shortDate(
+        _ date: Date
+    ) -> String {
+        date.formatted(
+            .dateTime
+                .day()
+                .month(.abbreviated)
+        )
+    }
 
+    private func recencyText(
+        _ days: Int
+    ) -> String {
+        switch days {
+        case 0:
+            return "Today"
+
+        case 1:
+            return "Yesterday"
+
+        default:
+            return "\(days) days ago"
+        }
+    }
+    
     private func changeText(
         _ percentage: Double?
     ) -> String {
