@@ -67,12 +67,27 @@ final class PurchaseManager {
     }
 
     init() {
+        if AppRuntime.isScreenshotMode {
+            if AppRuntime.screenshotPlusAccess {
+                purchasedProductIDs = [
+                    EnoughProductID.yearly.rawValue
+                ]
+            }
+
+            return
+        }
+
         transactionUpdatesTask =
             observeTransactionUpdates()
     }
 
 
     func prepare() async {
+        guard !AppRuntime.isScreenshotMode
+        else {
+            return
+        }
+
         await refreshEntitlements()
         await loadProducts()
     }
@@ -145,6 +160,15 @@ final class PurchaseManager {
     }
 
     func refreshEntitlements() async {
+        if AppRuntime.isScreenshotMode {
+            purchasedProductIDs =
+                AppRuntime.screenshotPlusAccess
+                ? [EnoughProductID.yearly.rawValue]
+                : []
+
+            return
+        }
+        
         var activeProductIDs:
             Set<String> = []
 

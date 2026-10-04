@@ -1718,8 +1718,9 @@ struct TrendsView: View {
     private func workoutDateText(
         _ workout: StoredWorkout
     ) -> String {
-        if Calendar.current.isDateInToday(
-            workout.startDate
+        if Calendar.current.isDate(
+            workout.startDate,
+            inSameDayAs: AppRuntime.now
         ) {
             return "Today · "
                 + workout.startDate.formatted(

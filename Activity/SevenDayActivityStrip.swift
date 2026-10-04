@@ -22,10 +22,7 @@ struct SevenDayActivityStrip: View {
         return aerobicTargetMinutes / 7
     }
 
-    /*
-     The chart uses the largest recorded day or slightly
-     more than the daily target pace as its vertical scale.
-     */
+
     private var chartMaximumMinutes: Double {
         let largestDay =
             days

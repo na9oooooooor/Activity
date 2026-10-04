@@ -18,9 +18,12 @@ struct ContentView: View {
     @State private var showingSettingsPaywall = false
     @State private var purchases = PurchaseManager()
     @State private var showingTodayPaywall = false
+    @State private var hasObservedInitialAssessment = false
+    @State private var reviewRequestPending = false
     
     @Query private var savedSettings: [AppSettings]
-
+    
+    @Environment(\.requestReview) private var requestReview
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     private var onboardingPresented: Binding<Bool> {
@@ -76,8 +79,60 @@ struct ContentView: View {
         }
         .tint(ActivityTheme.accent)
         .stableTabBar()
+        .onChange(
+            of: dashboard.assessment
+        ) { oldAssessment, newAssessment in
+            guard let newAssessment else {
+                return
+            }
+
+            /*
+             Ignore the first dashboard load so the review
+             prompt never appears immediately after launch.
+             */
+            guard hasObservedInitialAssessment
+            else {
+                hasObservedInitialAssessment = true
+                return
+            }
+
+            let wasSafelyCovered =
+                oldAssessment?
+                    .recommendation
+                    .reason == .targetsMet
+
+            let isNowSafelyCovered =
+                newAssessment.status
+                    == .meetingTargets
+                && newAssessment
+                    .recommendation
+                    .reason == .targetsMet
+
+            guard !wasSafelyCovered,
+                  isNowSafelyCovered
+            else {
+                return
+            }
+
+            Task {
+                await considerReviewPrompt()
+            }
+        }
         .task {
+            if savedSettings.first?
+                .hasCompletedOnboarding == true {
+
+                ReviewPromptManager
+                    .recordUseDay()
+            }
+
             await prepareDashboard()
+            await updateSmartReminder()
+            if AppRuntime.isScreenshotMode,
+               AppRuntime.screenshotScenario == .paywall {
+
+                showingTodayPaywall = true
+            }
         }
         .task {
             await purchases.prepare()
@@ -95,15 +150,25 @@ struct ContentView: View {
         #endif
         }
         .onChange(
+            of: smartReminderFingerprint
+        ) { _, _ in
+            Task {
+                await updateSmartReminder()
+            }
+        }
+        .onChange(
             of: scenePhase
         ) { _, newPhase in
             guard newPhase == .active,
                   savedSettings.first?
                     .hasCompletedOnboarding
                     == true
+                    
             else {
                 return
             }
+            
+            ReviewPromptManager.recordUseDay()
 
             Task {
                 await purchases
@@ -405,6 +470,61 @@ struct ContentView: View {
   
         }
     }
+    
+    @MainActor
+    private func considerReviewPrompt()
+        async {
+
+        guard ReviewPromptManager.isEligible,
+              !reviewRequestPending,
+              scenePhase == .active,
+              selectedTab == .today,
+              dashboard.state == .ready,
+              dashboard.assessment?
+                .recommendation
+                .reason == .targetsMet,
+              savedSettings.first?
+                .hasCompletedOnboarding
+                == true,
+              !showingSettings,
+              !showingSettingsPaywall,
+              !showingTodayPaywall,
+              !showingExplanation
+        else {
+            return
+        }
+
+        reviewRequestPending = true
+
+        /*
+         Let the completed dashboard settle before showing
+         any system interface.
+         */
+        try? await Task.sleep(
+            for: .seconds(2)
+        )
+
+        guard scenePhase == .active,
+              selectedTab == .today,
+              dashboard.assessment?
+                .recommendation
+                .reason == .targetsMet,
+              !showingSettings,
+              !showingSettingsPaywall,
+              !showingTodayPaywall,
+              !showingExplanation
+        else {
+            reviewRequestPending = false
+            return
+        }
+
+        ReviewPromptManager
+            .markPromptRequested()
+
+        requestReview()
+
+        reviewRequestPending = false
+    }
 
     // MARK: - Personal baseline
 
@@ -604,10 +724,25 @@ struct ContentView: View {
                             )
                         }
                     )
+                } else if let errorMessage =
+                            dashboard.state.errorMessage {
+
+                    initialLoadFailureView(
+                        message: errorMessage
+                    )
                 } else {
-                    Form {
-                        appleHealthSection
-                        dashboardStateSection
+                    ZStack {
+                        ActivityTheme.background
+                            .ignoresSafeArea()
+
+                        ProgressView()
+                            .controlSize(.large)
+                            .tint(
+                                ActivityTheme.accent
+                            )
+                            .accessibilityLabel(
+                                "Updating activity"
+                            )
                     }
                 }
             }
@@ -651,6 +786,76 @@ struct ContentView: View {
         )
         || purchases.purchasedProductIDs.contains(
             EnoughProductID.monthly.rawValue
+        )
+    }
+    
+    private func initialLoadFailureView(
+        message: String
+    ) -> some View {
+
+        VStack(spacing: 20) {
+            Spacer()
+
+            Image("pebble_no_data")
+                .resizable()
+                .scaledToFit()
+                .frame(
+                    width: 160,
+                    height: 160
+                )
+                .accessibilityHidden(true)
+
+            VStack(spacing: 8) {
+                Text(
+                    "We couldn’t update your week"
+                )
+                .font(.title2.bold())
+                .multilineTextAlignment(
+                    .center
+                )
+
+                Text(message)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(
+                        .center
+                    )
+            }
+
+            Button {
+                Task {
+                    await refreshDashboard()
+                }
+            } label: {
+                Label(
+                    "Try Again",
+                    systemImage:
+                        "arrow.clockwise"
+                )
+                .frame(
+                    maxWidth: .infinity
+                )
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+
+            Button {
+                showingSettings = true
+            } label: {
+                Text("Open Settings")
+            }
+
+            Spacer()
+            Spacer()
+        }
+        .padding(32)
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity
+        )
+        .background(
+            ActivityTheme.background
+                .ignoresSafeArea()
         )
     }
     
@@ -797,6 +1002,22 @@ struct ContentView: View {
                 }
                 
                 appleHealthSection
+                
+                Section("Reminders") {
+                    NavigationLink {
+                        ReminderSettingsView(
+                            snapshot:
+                                dashboard.input?.snapshot,
+                            assessment:
+                                dashboard.assessment
+                        )
+                    } label: {
+                        Label(
+                            "Reminders",
+                            systemImage: "bell"
+                        )
+                    }
+                }
 
                 Section("Activity") {
                     NavigationLink {
@@ -926,14 +1147,109 @@ struct ContentView: View {
             }
         }
     }
-    
+    // MARK: - Smart reminders
+
+    private var smartReminderFingerprint:
+        String {
+
+        guard let input = dashboard.input,
+              let assessment =
+                dashboard.assessment
+        else {
+            return "unavailable"
+        }
+
+        let snapshot = input.snapshot
+
+        return [
+            assessment
+                .recommendation
+                .reason
+                .rawValue,
+            snapshot.recordState.rawValue,
+            String(
+                snapshot
+                    .daysSinceLastTargetActivity
+                    ?? -1
+            ),
+            String(
+                snapshot
+                    .aerobicMinutesExpiringSoon
+            ),
+            String(
+                snapshot
+                    .strengthDaysExpiringSoon
+            ),
+            String(
+                input.checkIn.wantsRecovery
+            )
+        ]
+        .joined(separator: "|")
+    }
+
+    private func updateSmartReminder() async {
+        let defaults =
+            UserDefaults.standard
+
+        let enabled =
+            defaults.bool(
+                forKey:
+                    ReminderService.enabledKey
+            )
+
+        guard enabled else {
+            ReminderService()
+                .cancelScheduledReminder()
+
+            return
+        }
+
+        let hour =
+            defaults.object(
+                forKey:
+                    ReminderService.hourKey
+            ) as? Int ?? 18
+
+        let minute =
+            defaults.object(
+                forKey:
+                    ReminderService.minuteKey
+            ) as? Int ?? 0
+
+        let reminders =
+            ReminderService()
+
+        _ = await reminders
+            .updateSmartReminder(
+                enabled: enabled,
+                preferredHour: hour,
+                preferredMinute: minute,
+                snapshot:
+                    dashboard.input?.snapshot,
+                assessment:
+                    dashboard.assessment
+            )
+    }
 
 
     // MARK: - Actions
 
     private func prepareDashboard() async {
-        await healthKit.refreshAccessState()
+        if AppRuntime.isScreenshotMode {
+            dashboard.loadStoredData(
+                modelContext: modelContext,
+                now: AppRuntime.now
+            )
 
+            return
+        }
+        await healthKit.refreshAccessState()
+        
+        if dashboard.input == nil {
+            dashboard.loadStoredData(
+                modelContext: modelContext
+            )
+        }
         if healthKit.accessState
             == .requestFinished {
 
@@ -959,6 +1275,14 @@ struct ContentView: View {
     }
 
     private func refreshDashboard() async {
+        if AppRuntime.isScreenshotMode {
+            dashboard.loadStoredData(
+                modelContext: modelContext,
+                now: AppRuntime.now
+            )
+
+            return
+        }
         guard !dashboard.state.isLoading
         else {
             return

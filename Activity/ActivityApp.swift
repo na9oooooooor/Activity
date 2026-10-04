@@ -19,7 +19,8 @@ struct ActivityHealthApp: App {
             ModelConfiguration(
                 "ActivityLocal",
                 schema: schema,
-                isStoredInMemoryOnly: false,
+                isStoredInMemoryOnly:
+                    AppRuntime.isScreenshotMode,
                 cloudKitDatabase: .none
             )
 
@@ -31,6 +32,12 @@ struct ActivityHealthApp: App {
                         configuration
                     ]
                 )
+            if AppRuntime.isScreenshotMode {
+                try ScreenshotDataSeeder.seed(
+                    modelContext:
+                        modelContainer.mainContext
+                )
+            }
         } catch {
             fatalError(
                 """
@@ -39,11 +46,21 @@ struct ActivityHealthApp: App {
                 """
             )
         }
+        
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme(
+                    AppRuntime.isScreenshotMode
+                    ? (
+                        AppRuntime.screenshotUsesDarkMode
+                        ? .dark
+                        : .light
+                    )
+                    : nil
+                )
         }
         .modelContainer(modelContainer)
     }

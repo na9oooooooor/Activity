@@ -324,9 +324,29 @@ struct EnoughPlusView: View {
     private func displayPrice(
         for id: EnoughProductID
     ) -> String {
-        purchases.product(
-            for: id
-        )?.displayPrice ?? "…"
+        if let price =
+            purchases.product(
+                for: id
+            )?.displayPrice {
+
+            return price
+        }
+
+        guard AppRuntime.isScreenshotMode
+        else {
+            return "…"
+        }
+
+        switch id {
+        case .monthly:
+            return "$2.99"
+
+        case .yearly:
+            return "$19.99"
+
+        case .lifetime:
+            return "$49.99"
+        }
     }
 
     // MARK: - Purchase
@@ -360,16 +380,20 @@ struct EnoughPlusView: View {
         .buttonStyle(.plain)
         .disabled(
             purchases.isPurchasing
-            || purchases.product(
-                for: selectedProductID
-            ) == nil
+            || (
+                !AppRuntime.isScreenshotMode
+                && purchases.product(
+                    for: selectedProductID
+                ) == nil
+            )
         )
         .opacity(
-            purchases.product(
+            AppRuntime.isScreenshotMode
+            || purchases.product(
                 for: selectedProductID
-            ) == nil
-            ? 0.55
-            : 1
+            ) != nil
+            ? 1
+            : 0.55
         )
     }
 
@@ -391,6 +415,10 @@ struct EnoughPlusView: View {
     }
 
     private func purchaseSelectedProduct() {
+        guard !AppRuntime.isScreenshotMode
+        else {
+            return
+        }
         guard let product =
             purchases.product(
                 for: selectedProductID

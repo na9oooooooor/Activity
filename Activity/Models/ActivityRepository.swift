@@ -904,7 +904,9 @@ final class ActivityRepository {
             aerobicMinutesExpiringSoon:
                 aerobicMinutesExpiringSoon,
             strengthDaysExpiringSoon:
-                strengthDaysExpiringSoon
+                strengthDaysExpiringSoon,
+            daysSinceLastTargetActivity:
+                daysSinceLastTargetActivity
         )
 
         let storedCheckIn = try fetchCheckIn(
