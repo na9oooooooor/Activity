@@ -350,7 +350,19 @@ struct EnoughPlusView: View {
     }
 
     // MARK: - Purchase
+    
+    private static let termsOfUseURL =
+        URL(
+            string:
+                "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+        )!
 
+    private static let privacyPolicyURL =
+        URL(
+            string:
+                "https://app.notion.com/p/Enough-Privacy-Policy-3e465dfadc678099983fcf64c7ab3cf7"
+        )!
+    
     private var purchaseButton: some View {
         Button {
             purchaseSelectedProduct()
@@ -459,11 +471,32 @@ struct EnoughPlusView: View {
     // MARK: - Renewal information
 
     private var renewalNotice: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             Text(renewalText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+
+            HStack(spacing: 12) {
+                Link(
+                    "Terms of Use",
+                    destination:
+                        Self.termsOfUseURL
+                )
+
+                Text("•")
+                    .foregroundStyle(.tertiary)
+
+                Link(
+                    "Privacy Policy",
+                    destination:
+                        Self.privacyPolicyURL
+                )
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(
+                ActivityTheme.accent
+            )
 
             if let error =
                 purchases.errorMessage {
@@ -484,18 +517,21 @@ struct EnoughPlusView: View {
         switch selectedProductID {
         case .yearly:
             return """
-            Eligible new subscribers receive 7 days free. \
-            The subscription then renews yearly unless canceled.
+            Eligible new subscribers receive 7 days free, then \
+            \(displayPrice(for: .yearly)) per year. Renews yearly \
+            unless canceled at least 24 hours before renewal.
             """
 
         case .monthly:
             return """
-            The subscription renews monthly unless canceled.
+            \(displayPrice(for: .monthly)) per month. Renews monthly \
+            unless canceled at least 24 hours before renewal.
             """
 
         case .lifetime:
             return """
-            Lifetime is a one-time purchase with no renewal.
+            \(displayPrice(for: .lifetime)) once. Lifetime access \
+            does not renew.
             """
         }
     }

@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		7017B201306EC2A600B2A96F /* Enough.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 7017B200306EC2A600B2A96F /* Enough.storekit */; };
+		709CEBEB30731D450043737D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 709CEBEA30731D450043737D /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -24,34 +24,33 @@
 		7017B200306EC2A600B2A96F /* Enough.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Enough.storekit; sourceTree = "<group>"; };
 		7039562730693EE100825B7D /* Activity.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Activity.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		709CEBBC307310000043737D /* ActivityScreenshotsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ActivityScreenshotsUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		709CEBEA30731D450043737D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		7039563430693EE400825B7D /* Exceptions for "Activity" folder in "Activity" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Docs/Architecture.md,
+				Docs/ProductRules.md,
 				Info.plist,
 			);
 			target = 7039562630693EE100825B7D /* Activity */;
 		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
-/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		7039563F30693FE200825B7D /* Exceptions for "Activity" folder in "Copy Bundle Resources" phase from "Activity" target */ = {
-			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
-			buildPhase = 7039562530693EE100825B7D /* Resources */;
+		709CEBEF307325490043737D /* Exceptions for "Scripts" folder in "Activity" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Engines/ActivityRules.swift,
+				"export-screenshots.sh",
 			);
+			target = 7039562630693EE100825B7D /* Activity */;
 		};
-/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7039562930693EE100825B7D /* Activity */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				7039563430693EE400825B7D /* Exceptions for "Activity" folder in "Activity" target */,
-				7039563F30693FE200825B7D /* Exceptions for "Activity" folder in "Copy Bundle Resources" phase from "Activity" target */,
 			);
 			path = Activity;
 			sourceTree = "<group>";
@@ -63,7 +62,15 @@
 		};
 		709CEBC5307314030043737D /* Scripts */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				709CEBEF307325490043737D /* Exceptions for "Scripts" folder in "Activity" target */,
+			);
 			path = Scripts;
+			sourceTree = "<group>";
+		};
+		709CEBEC307321670043737D /* Controllers */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Controllers;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -89,6 +96,8 @@
 		7039561E30693EE100825B7D = {
 			isa = PBXGroup;
 			children = (
+				709CEBEC307321670043737D /* Controllers */,
+				709CEBEA30731D450043737D /* PrivacyInfo.xcprivacy */,
 				709CEBC5307314030043737D /* Scripts */,
 				7017B200306EC2A600B2A96F /* Enough.storekit */,
 				7039562930693EE100825B7D /* Activity */,
@@ -124,6 +133,7 @@
 			fileSystemSynchronizedGroups = (
 				7039562930693EE100825B7D /* Activity */,
 				709CEBC5307314030043737D /* Scripts */,
+				709CEBEC307321670043737D /* Controllers */,
 			);
 			name = Activity;
 			packageProductDependencies = (
@@ -199,7 +209,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7017B201306EC2A600B2A96F /* Enough.storekit in Resources */,
+				709CEBEB30731D450043737D /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -241,8 +251,10 @@
 		7039563630693EE400825B7D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = AppIconPlus;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Activity/Activity.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -256,8 +268,8 @@
 				INFOPLIST_FILE = Activity/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Enough;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Activity Health reads workouts and movement data to show weekly activity guidance and personal trends.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Activity Health saves workouts you add manually to Apple Health.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Enough reads your workouts, exercise minutes, steps, distance, stand hours, and active energy to show your rolling activity progress, recommendations, and trends.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Enough saves workouts you add manually to Apple Health so they stay with your other health and fitness data.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -293,8 +305,10 @@
 		7039563730693EE400825B7D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = AppIconPlus;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Activity/Activity.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -308,8 +322,8 @@
 				INFOPLIST_FILE = Activity/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Enough;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Activity Health reads workouts and movement data to show weekly activity guidance and personal trends.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Activity Health saves workouts you add manually to Apple Health.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Enough reads your workouts, exercise minutes, steps, distance, stand hours, and active energy to show your rolling activity progress, recommendations, and trends.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Enough saves workouts you add manually to Apple Health so they stay with your other health and fitness data.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

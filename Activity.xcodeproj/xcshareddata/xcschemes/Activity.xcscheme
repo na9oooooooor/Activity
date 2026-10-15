@@ -50,6 +50,26 @@
                ReferencedContainer = "container:Activity.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "709CEBCB30731A380043737D"
+               BuildableName = "ActivityCoreTests.xctest"
+               ReferencedContainer = "container:Activity.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "709CEBDB30731C110043737D"
+               BuildableName = "ActivityCoreTests.xctest"
+               ReferencedContainer = "container:Activity.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

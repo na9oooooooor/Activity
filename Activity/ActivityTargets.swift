@@ -6,11 +6,6 @@ struct ActivityTargets:
 
     let aerobicMinimumMinutes: Double
     let strengthMinimumDays: Int
-
-    /*
-     This remains a research reference. It is not a
-     personal score or a maximum safe amount.
-     */
     let aerobicAdditionalRangeMinutes: Double
 
     static let generalAdultGuidance =

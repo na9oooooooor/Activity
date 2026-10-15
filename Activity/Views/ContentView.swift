@@ -86,10 +86,6 @@ struct ContentView: View {
                 return
             }
 
-            /*
-             Ignore the first dashboard load so the review
-             prompt never appears immediately after launch.
-             */
             guard hasObservedInitialAssessment
             else {
                 hasObservedInitialAssessment = true
@@ -137,19 +133,18 @@ struct ContentView: View {
         .task {
             await purchases.prepare()
 
-        #if DEBUG
-            print(
-                "STOREKIT PRODUCTS:",
-                purchases.products.map(\.id)
+            PlusAppIconManager.synchronize(
+                isPlusActive:
+                    purchases.hasPlusAccess
             )
-
-            print(
-                "ENOUGH PLUS ACTIVE:",
-                purchases.hasPlusAccess
-            )
-        #endif
         }
         .onChange(
+            of: purchases.hasPlusAccess
+        ) { _, hasPlusAccess in
+            PlusAppIconManager.synchronize(
+                isPlusActive: hasPlusAccess
+            )
+        }        .onChange(
             of: smartReminderFingerprint
         ) { _, _ in
             Task {
