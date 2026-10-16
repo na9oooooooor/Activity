@@ -116,21 +116,28 @@ struct EnoughPlusView: View {
                 icon: "calendar",
                 title: "Longer trends",
                 detail:
-                    "See your 30- and 90-day patterns."
+                    "See your 30- and 90-day activity patterns."
             )
 
             benefitRow(
                 icon: "chart.line.uptrend.xyaxis",
                 title: "Personal comparisons",
                 detail:
-                    "Understand how activity compares with your usual."
+                    "Compare your recent 30 days with your previous 60."
             )
 
             benefitRow(
-                icon: "slider.horizontal.3",
-                title: "Your own targets",
+                icon: "target",
+                title: "Custom targets",
                 detail:
-                    "Adjust activity targets and week settings."
+                    "Adjust your aerobic and strength targets."
+            )
+
+            benefitRow(
+                icon: "clock",
+                title: "Your activity day",
+                detail:
+                    "Choose when a new activity day begins."
             )
         }
         .activityCard()

@@ -229,24 +229,7 @@ struct ActivityExplanationView: View {
             )
             .font(.footnote)
             .foregroundStyle(.secondary)
-            if input.checkIn.wantsRecovery {
-                LabeledContent(
-                    "Your selection",
-                    value: "Recovery"
-                )
-            } else if input.checkIn
-                .reportsLowMovement {
-
-                LabeledContent(
-                    "Your selection",
-                    value: "Low movement"
-                )
-            } else {
-                LabeledContent(
-                    "Your selection",
-                    value: "Normal day"
-                )
-            }
+            
 
             Text(
                 """

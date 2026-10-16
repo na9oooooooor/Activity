@@ -100,7 +100,18 @@ struct WorkoutClassificationSettingsView: View {
                     }
                 }
             }
-
+            Section {
+                Text(
+                    """
+                    Every workout type is customizable. Tap a workout to choose \
+                    whether it contributes aerobic activity, strength, both, \
+                    or neither.
+                    """
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+            
             Section("All Workout Types") {
                 ForEach(remainingDefinitions) {
                     definition in
@@ -236,40 +247,63 @@ struct WorkoutClassificationSettingsView: View {
                 }
             }
         } label: {
-            HStack(spacing: 12) {
-                VStack(
-                    alignment: .leading,
-                    spacing: 3
+            VStack(
+                alignment: .leading,
+                spacing: 7
+            ) {
+                HStack(
+                    alignment: .firstTextBaseline,
+                    spacing: 12
                 ) {
                     Text(definition.title)
+                        .font(.body.weight(.medium))
                         .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+
+                    Spacer(minLength: 12)
+
+                    Image(
+                        systemName:
+                            "chevron.up.chevron.down"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                }
+
+                HStack(spacing: 7) {
+                    Text(effectiveRole.title)
+                        .font(
+                            .subheadline.weight(
+                                .semibold
+                            )
+                        )
+                        .foregroundStyle(
+                            ActivityTheme.accent
+                        )
+
+                    Text("•")
+                        .foregroundStyle(.tertiary)
 
                     Text(
                         preference == nil
-                            ? "Default"
-                            : "Your setting"
+                            ? "App default"
+                            : "Customized"
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
-
-                Spacer()
-
-                Text(effectiveRole.title)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                Image(
-                    systemName:
-                        "chevron.up.chevron.down"
-                )
-                .font(.caption)
-                .foregroundStyle(.tertiary)
             }
+            .padding(.vertical, 5)
+            .frame(
+                maxWidth: .infinity,
+                alignment: .leading
+            )
             .contentShape(Rectangle())
         }
         .accessibilityLabel(definition.title)
-        .accessibilityValue(effectiveRole.title)
+        .accessibilityValue(
+            "\(effectiveRole.title), \(preference == nil ? "app default" : "customized")"
+        )
     }
     @ViewBuilder
     private func unrecognizedClassificationRow(

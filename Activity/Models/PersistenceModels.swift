@@ -188,21 +188,16 @@ final class DailyActivityRecord {
     var moderateMinutes: Double
     var vigorousMinutes: Double
     var unknownIntensityMinutes: Double
-
-    
     var strengthWorkoutCount: Int
-
+    var excludedAerobicWorkoutMinutes: Double = 0
     var recordedSteps: Int?
     var appleExerciseMinutes: Double?
     var standHours: Int?
     var activeEnergyKilocalories: Double?
     var walkingRunningDistanceMeters: Double?
     var cyclingDistanceMeters: Double?
-
-    
     var aerobicCoverageRawValue: String
     var strengthCoverageRawValue: String
-
     var lastCalculatedAt: Date
 
     init(
@@ -212,6 +207,7 @@ final class DailyActivityRecord {
         vigorousMinutes: Double = 0,
         unknownIntensityMinutes: Double = 0,
         strengthWorkoutCount: Int = 0,
+        excludedAerobicWorkoutMinutes: Double = 0,
         recordedSteps: Int? = nil,
         appleExerciseMinutes: Double? = nil,
         standHours: Int? = nil,
@@ -232,7 +228,11 @@ final class DailyActivityRecord {
 
         self.strengthWorkoutCount =
             max(0, strengthWorkoutCount)
-
+        self.excludedAerobicWorkoutMinutes =
+            max(
+                0,
+                excludedAerobicWorkoutMinutes
+            )
         self.recordedSteps =
             recordedSteps.map { max(0, $0) }
 
@@ -268,8 +268,7 @@ final class DailyActivityRecord {
     }
 
     var supplementalAppleExerciseMinutes: Double {
-        guard let appleExerciseMinutes
-        else {
+        guard let appleExerciseMinutes else {
             return 0
         }
 
@@ -277,6 +276,7 @@ final class DailyActivityRecord {
             0,
             appleExerciseMinutes
                 - classifiedAerobicClockMinutes
+                - excludedAerobicWorkoutMinutes
         )
     }
 

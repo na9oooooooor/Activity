@@ -22,32 +22,6 @@ enum DashboardLoadState: Equatable {
     }
 }
 
-enum TodayContextSelection:
-    String,
-    CaseIterable,
-    Identifiable {
-
-    case normal
-    case recovery
-    case lowMovement
-
-    var id: String {
-        rawValue
-    }
-
-    var title: String {
-        switch self {
-        case .normal:
-            return "Normal day"
-
-        case .recovery:
-            return "Recovery"
-
-        case .lowMovement:
-            return "Low movement"
-        }
-    }
-}
 
 @MainActor
 @Observable
@@ -61,8 +35,6 @@ final class DashboardController {
     private(set) var assessment:
         ActivityAssessment?
 
-    private(set) var todayContext:
-        TodayContextSelection = .normal
 
     /*
      Imports the latest HealthKit data and then rebuilds
@@ -129,44 +101,6 @@ final class DashboardController {
         }
     }
 
-    func updateTodayContext(
-        _ selection: TodayContextSelection,
-        modelContext: ModelContext,
-        now: Date = .now
-    ) {
-        let wantsRecovery =
-            selection == .recovery
-
-        let reportsLowMovement =
-            selection == .lowMovement
-
-        do {
-            let repository =
-                ActivityRepository(
-                    modelContext: modelContext
-                )
-
-            try repository.saveTodayCheckIn(
-                wantsRecovery:
-                    wantsRecovery,
-                reportsLowMovement:
-                    reportsLowMovement,
-                now: now
-            )
-
-            let loadedInput =
-                try repository.loadDashboardInput(
-                    now: now
-                )
-
-            apply(loadedInput)
-            state = .ready
-        } catch {
-            state = .failed(
-                error.localizedDescription
-            )
-        }
-    }
 
     private func apply(
         _ loadedInput: DashboardInput
@@ -187,16 +121,5 @@ final class DashboardController {
                 configuration:
                     configuration
             )
-
-        if loadedInput.checkIn.wantsRecovery {
-            todayContext = .recovery
-        } else if loadedInput
-            .checkIn
-            .reportsLowMovement {
-
-            todayContext = .lowMovement
-        } else {
-            todayContext = .normal
-        }
     }
 }

@@ -16,16 +16,12 @@ struct TodayDashboardView: View {
     let input: DashboardInput
     let assessment: ActivityAssessment
 
-    let todayContext:
-        TodayContextSelection
     let hasPlusAccess: Bool
     let recommendationReason: String
     let onShowExplanation: () -> Void
     let onShowSettings: () -> Void
     let onShowPaywall: () -> Void
     let onRefresh: () async -> Void
-    let onContextChange:
-        (TodayContextSelection) -> Void
     @Environment(\.dynamicTypeSize)
     private var dynamicTypeSize:
         DynamicTypeSize
@@ -80,14 +76,29 @@ struct TodayDashboardView: View {
             ) {
                 pageHeader
 
+                homeStatusHeader
+
+                RiverStatusScene(
+                    aerobicProgress: aerobicProgress,
+                    strengthProgress: strengthProgress,
+                    recommendationReason:
+                        assessment.recommendation.reason,
+                    recordState:
+                        input.snapshot.recordState
+                ).padding(
+                    .horizontal,
+                    -ActivityTheme.pagePadding
+                )
+                
+
                 recommendationCard
+
+                targetSection
+                    .activityCard()
 
                 activityHealthHeader
 
                 activitySummaryCard
-
-                targetSection
-                    .activityCard()
 
                 comparisonRow
                     .activityCard()
@@ -120,19 +131,171 @@ struct TodayDashboardView: View {
                 TodayDecisionSheet(
                     assessment: assessment,
                     recommendationReason:
-                        recommendationReason,
-                    todayContext:
-                        todayContext,
-                    onContextChange:
-                        onContextChange
+                        recommendationReason
                 )
-
             case .comparison:
                 PersonalComparisonSheet(
                     input: input
                 )
             }
         }
+    }
+    
+    private var aerobicProgress: Double {
+        let target =
+            input.targets.aerobicMinimumMinutes
+
+        guard target > 0 else {
+            return 0
+        }
+
+        return input.snapshot
+            .moderateEquivalentMinutes / target
+    }
+
+    private var strengthProgress: Double {
+        let target =
+            input.targets.strengthMinimumDays
+
+        guard target > 0 else {
+            return 0
+        }
+
+        return Double(
+            input.snapshot.strengthDays
+        ) / Double(target)
+    }
+
+    private var aerobicMinutesRemaining: Int {
+        Int(
+            max(
+                0,
+                input.targets.aerobicMinimumMinutes
+                    - input.snapshot
+                        .moderateEquivalentMinutes
+            )
+            .rounded(.up)
+        )
+    }
+
+    private var strengthDaysRemaining: Int {
+        max(
+            0,
+            input.targets.strengthMinimumDays
+                - input.snapshot.strengthDays
+        )
+    }
+    
+    private var homeStatusHeader: some View {
+        VStack(
+            alignment: .leading,
+            spacing: 6
+        ) {
+            Text(homeStatusTitle)
+                .font(
+                    .system(
+                        size: 32,
+                        weight: .bold
+                    )
+                )
+                .fontWidth(.condensed)
+                .tracking(-0.4)
+                .fixedSize(
+                    horizontal: false,
+                    vertical: true
+                )
+
+            Text(homeStatusSubtitle)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .fixedSize(
+                    horizontal: false,
+                    vertical: true
+                )
+        }
+    }
+    
+    private var homeStatusTitle: String {
+        switch input.snapshot.recordState {
+        case .importing, .stale:
+            return "Updating your activity"
+
+        case .unavailable:
+            return "Connect Apple Health"
+
+        case .current:
+            break
+        }
+
+        if assessment.aerobicTargetMet &&
+            assessment.strengthTargetMet {
+
+            return "Your week is covered"
+        }
+
+        if assessment.aerobicTargetMet {
+            if strengthDaysRemaining == 1 {
+                return """
+                One strength day would complete your week
+                """
+            }
+
+            return """
+            \(strengthDaysRemaining) strength days would \
+            complete your week
+            """
+        }
+
+        if assessment.strengthTargetMet {
+            return """
+            \(aerobicMinutesRemaining) more aerobic minutes \
+            would complete your week
+            """
+        }
+
+        return "There’s room to build"
+    }
+    
+    private var homeStatusSubtitle: String {
+        switch input.snapshot.recordState {
+        case .importing:
+            return "Enough is reading your recent activity."
+
+        case .stale:
+            return "Refresh to update your rolling seven-day window."
+
+        case .unavailable:
+            return "Allow Health access to see your progress."
+
+        case .current:
+            break
+        }
+
+        if assessment.aerobicTargetMet &&
+            assessment.strengthTargetMet {
+
+            return """
+            Both targets are met. Anything more is optional.
+            """
+        }
+
+        if assessment.aerobicTargetMet {
+            return "Your aerobic target is covered."
+        }
+
+        if assessment.strengthTargetMet {
+            return "Your strength target is covered."
+        }
+
+        let strengthText =
+            strengthDaysRemaining == 1
+            ? "1 strength day"
+            : "\(strengthDaysRemaining) strength days"
+
+        return """
+        \(aerobicMinutesRemaining) aerobic minutes and \
+        \(strengthText) remain.
+        """
     }
     // MARK: - Page header
 
@@ -251,12 +414,6 @@ struct TodayDashboardView: View {
             .padding(.bottom, 8)
             
             
-            Text(statusTitle)
-                .font(
-                    ActivityTheme.heroFont
-                )
-                .fontWidth(.condensed)
-                .tracking(-0.8)
 
             Text(activityProgressSummary)
                 .font(.body)
@@ -274,7 +431,7 @@ struct TodayDashboardView: View {
     private var recommendationCard: some View {
         VStack(
             alignment: .leading,
-            spacing: 18
+            spacing: 14
         ) {
             Button {
                 presentedSheet = .today
@@ -303,33 +460,9 @@ struct TodayDashboardView: View {
 
             recommendationContent
 
-            Picker(
-                "Today’s context",
-                selection: Binding(
-                    get: {
-                        todayContext
-                    },
-                    set: {
-                        onContextChange($0)
-                    }
-                )
-            ) {
-                ForEach(
-                    TodayContextSelection.allCases
-                ) { selection in
-                    Text(selection.title)
-                        .tag(selection)
-                }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityHint(
-                """
-                Changes today’s suggestion without changing \
-                your targets or workout history.
-                """
-            )
+          
         }
-        .padding(18)
+        .padding(16)
         .background(
             recommendationTint.opacity(0.10),
             in: RoundedRectangle(
@@ -373,45 +506,8 @@ struct TodayDashboardView: View {
     }
     
     @ViewBuilder
-    private var recommendationContent:
-        some View {
-
-        if dynamicTypeSize
-            .isAccessibilitySize {
-
-            VStack(
-                alignment: .leading,
-                spacing: 12
-            ) {
-                recommendationCopy
-
-                if let assetName =
-                    pebbleAssetName {
-
-                    pebbleImage(assetName)
-                        .frame(
-                            maxWidth: .infinity,
-                            alignment: .trailing
-                        )
-                }
-            }
-        } else {
-            HStack(
-                alignment: .bottom,
-                spacing: 12
-            ) {
-                recommendationCopy
-                    .layoutPriority(1)
-
-                Spacer(minLength: 0)
-
-                if let assetName =
-                    pebbleAssetName {
-
-                    pebbleImage(assetName)
-                }
-            }
-        }
+    private var recommendationContent: some View {
+        recommendationCopy
     }
 
     private var recommendationCopy: some View {
@@ -442,18 +538,6 @@ struct TodayDashboardView: View {
         }
     }
 
-    private func pebbleImage(
-        _ assetName: String
-    ) -> some View {
-        Image(assetName)
-            .resizable()
-            .scaledToFit()
-            .frame(
-                width: 92,
-                height: 104
-            )
-            .accessibilityHidden(true)
-    }
 
     // MARK: - Today
 
@@ -479,7 +563,7 @@ struct TodayDashboardView: View {
                             height: 9
                         )
 
-                    Text(recommendationTitle)
+                    Text("Today’s suggestion")
                         .font(.title3)
                         .fontWeight(.semibold)
                         .foregroundStyle(.primary)
@@ -788,36 +872,35 @@ struct TodayDashboardView: View {
     }
 
     private var chartLegend: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 20) {
             Label {
-                Text("Target pace")
+                Text("Daily reference")
             } icon: {
                 Capsule()
                     .fill(
-                        ActivityTheme.accent.opacity(0.22)
+                        ActivityTheme.accent
+                            .opacity(0.35)
                     )
                     .frame(
                         width: 22,
-                        height: 7
+                        height: 2
                     )
             }
 
             Label {
                 Text("Strength day")
             } icon: {
-                Circle()
-                    .fill(.primary.opacity(0.75))
-                    .frame(
-                        width: 8,
-                        height: 8
-                    )
+                Image(
+                    systemName: "dumbbell.fill"
+                )
+                .font(.caption2)
+                .foregroundStyle(
+                    ActivityTheme.accent
+                )
             }
         }
         .font(.caption)
         .foregroundStyle(.secondary)
-        .accessibilityElement(
-            children: .combine
-        )
     }
     
     // MARK: - Activity Health
@@ -833,7 +916,7 @@ struct TodayDashboardView: View {
                 alignment: .firstTextBaseline
             ) {
                 HStack(spacing: 8) {
-                    Text(statusTitle)
+                    Text("Your last 7 days")
                         .font(
                             .system(
                                 size: 32,
@@ -862,9 +945,7 @@ struct TodayDashboardView: View {
 
                 Spacer()
 
-                Text("Last 7 days")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        
             }
 
             Text(healthSummary)
@@ -956,8 +1037,8 @@ struct TodayDashboardView: View {
                         } else {
                             Text(
                                 """
-                                Compare your last 7 days with \
-                                your usual 90-day baseline.
+                                Compare your recent 30-day average with \
+                                the previous 60 days.
                                 """
                             )
                             .font(.subheadline)
@@ -1028,21 +1109,6 @@ struct TodayDashboardView: View {
         ?? "Recommendation unavailable"
     }
 
-    private var statusTitle: String {
-        switch assessment.status {
-        case .meetingTargets:
-            return "On track"
-
-        case .belowTargets:
-            return "Room to build"
-
-        case .updating:
-            return "Updating"
-
-        case .unavailable:
-            return "No activity data"
-        }
-    }
     
     private var activityProgressSummary: String {
         switch assessment.status {
@@ -1264,12 +1330,6 @@ private struct TodayDecisionSheet: View {
     let assessment: ActivityAssessment
     let recommendationReason: String
 
-    let todayContext:
-        TodayContextSelection
-
-    let onContextChange:
-        (TodayContextSelection) -> Void
-
     @Environment(\.dismiss)
     private var dismiss
 
@@ -1301,52 +1361,31 @@ private struct TodayDecisionSheet: View {
 
                     VStack(
                         alignment: .leading,
-                        spacing: 12
+                        spacing: 10
                     ) {
-                        Text("How today feels")
+                        Text("How this was decided")
                             .font(.headline)
 
                         Text(
                             """
-                            Choose a different context when \
-                            you need recovery or have moved \
-                            very little today.
+                            Enough uses your rolling seven-day \
+                            aerobic minutes, strength days, recent \
+                            activity, and activity that will soon \
+                            leave the window.
                             """
                         )
-                        .font(.subheadline)
+                        .font(.body)
                         .foregroundStyle(.secondary)
 
-                        Picker(
-                            "Today’s context",
-                            selection: Binding(
-                                get: {
-                                    todayContext
-                                },
-                                set: {
-                                    onContextChange($0)
-                                }
-                            )
-                        ) {
-                            ForEach(
-                                TodayContextSelection
-                                    .allCases
-                            ) { selection in
-                                Text(selection.title)
-                                    .tag(selection)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+                        Text(
+                            """
+                            This suggestion does not measure fatigue, \
+                            illness, injury, or medical readiness.
+                            """
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
-
-                    Text(
-                        """
-                        This changes today’s recommendation. \
-                        It does not change your imported \
-                        workouts or activity targets.
-                        """
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 }
                 .padding(
                     ActivityTheme.pagePadding
@@ -1356,12 +1395,8 @@ private struct TodayDecisionSheet: View {
                 ActivityTheme.background
                     .ignoresSafeArea()
             )
-            .navigationTitle(
-                "Today"
-            )
-            .navigationBarTitleDisplayMode(
-                .inline
-            )
+            .navigationTitle("Today")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(
                     placement: .confirmationAction
@@ -1412,8 +1447,8 @@ private struct PersonalComparisonSheet: View {
 
                     Text(
                         """
-                        Your last 7 completed days are \
-                        compared with the previous 90 \
+                        Your latest 30 completed days are \
+                        compared with the previous 60 \
                         completed days. Today is excluded.
                         """
                     )

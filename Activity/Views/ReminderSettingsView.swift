@@ -13,10 +13,16 @@ struct ReminderSettingsView: View {
         ReminderService()
 
     @AppStorage(
-        "enough.reminders.enabled"
+        ReminderService.enabledKey
     )
-    private var remindersEnabled = false
+    private var remindersEnabled =
+        false
 
+    @AppStorage(
+        WorkoutNotificationService.enabledKey
+    )
+    private var workoutNotificationsEnabled =
+        false
     @AppStorage(
         "enough.reminders.hour"
     )
@@ -62,14 +68,58 @@ struct ReminderSettingsView: View {
                         )
                     }
                 }
+                Toggle(
+                    isOn:
+                        $workoutNotificationsEnabled
+                ) {
+                    Label(
+                        "New workout updates",
+                        systemImage:
+                            "figure.run.circle.fill"
+                    )
+                }
+                .disabled(isUpdating)
+                .onChange(
+                    of: workoutNotificationsEnabled
+                ) { _, enabled in
+                    guard enabled else {
+                        return
+                    }
+
+                    Task {
+                        await reminders
+                            .refreshPermission()
+
+                        switch reminders.permissionState {
+                        case .allowed:
+                            break
+
+                        case .notRequested:
+                            let granted =
+                                await reminders
+                                    .requestPermission()
+
+                            if !granted {
+                                workoutNotificationsEnabled =
+                                    false
+                            }
+
+                        case .denied,
+                             .checking:
+                            workoutNotificationsEnabled =
+                                false
+                        }
+                    }
+                }
             } footer: {
                 Text(
                     """
-                    Enough chooses the day from your rolling \
-                    activity. You choose when it may notify you.
+                    Smart reminders suggest useful activity. Workout updates \
+                    confirm when a newly detected workout joins your rolling week.
                     """
                 )
             }
+            
 
             if remindersEnabled {
                 scheduleSection
@@ -305,6 +355,20 @@ struct ReminderSettingsView: View {
 
     private func prepareReminders() async {
         await reminders.refreshPermission()
+
+        if reminders.permissionState
+            == .denied {
+
+            remindersEnabled = false
+
+            workoutNotificationsEnabled =
+                false
+
+            reminders
+                .cancelScheduledReminder()
+
+            return
+        }
 
         guard remindersEnabled else {
             reminders

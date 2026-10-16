@@ -113,24 +113,25 @@ struct HowEnoughWorksView: View {
             Section("Today’s suggestion") {
                 explanationRow(
                     systemImage: "sparkles",
-                    title: "One calm next step",
+                    title: "Automatic guidance",
                     text:
                         """
                         Enough considers your remaining aerobic and \
-                        strength gaps, recent counted activity, \
-                        activity leaving the window, available data, \
-                        and the context you select for today.
+                        strength gaps, recent counted activity, activity \
+                        leaving the window, available data, and everyday \
+                        movement context. No daily choice is required.
                         """
                 )
 
                 explanationRow(
                     systemImage: "bed.double",
-                    title: "Recovery stays available",
+                    title: "Rest is always available",
                     text:
                         """
-                        Choosing Recovery changes today’s suggestion. \
-                        Enough does not estimate illness, injury, \
-                        fatigue, or medical readiness.
+                        Enough may suggest rest when your targets are \
+                        covered or useful activity is already complete. \
+                        It does not estimate illness, injury, fatigue, \
+                        or medical readiness.
                         """
                 )
             }

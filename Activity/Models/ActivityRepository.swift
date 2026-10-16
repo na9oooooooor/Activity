@@ -468,34 +468,41 @@ final class ActivityRepository {
         through lastDate: Date,
         calculatedAt: Date = .now
     ) throws {
-        let settings = try loadOrCreateSettings()
-        let calendar = makeCalendar(
-            using: settings
-        )
+        let settings =
+            try loadOrCreateSettings()
 
-        let earlierDate = min(
-            firstDate,
-            lastDate
-        )
+        let calendar =
+            makeCalendar(
+                using: settings
+            )
 
-        let laterDate = max(
-            firstDate,
-            lastDate
-        )
+        let earlierDate =
+            min(
+                firstDate,
+                lastDate
+            )
 
-        let firstDayStart = activityDayStart(
-            containing: earlierDate,
-            calendar: calendar,
-            startHour:
-                settings.activityDayStartHour
-        )
+        let laterDate =
+            max(
+                firstDate,
+                lastDate
+            )
 
-        let lastDayStart = activityDayStart(
-            containing: laterDate,
-            calendar: calendar,
-            startHour:
-                settings.activityDayStartHour
-        )
+        let firstDayStart =
+            activityDayStart(
+                containing: earlierDate,
+                calendar: calendar,
+                startHour:
+                    settings.activityDayStartHour
+            )
+
+        let lastDayStart =
+            activityDayStart(
+                containing: laterDate,
+                calendar: calendar,
+                startHour:
+                    settings.activityDayStartHour
+            )
 
         guard let endExclusive =
             calendar.date(
@@ -513,8 +520,6 @@ final class ActivityRepository {
                 from: firstDayStart,
                 until: endExclusive
             )
-        
-
 
         let existingRecords =
             try fetchDailyRecords(
@@ -522,45 +527,47 @@ final class ActivityRepository {
                 until: endExclusive
             )
 
-        var recordsByKey = Dictionary(
-            uniqueKeysWithValues:
-                existingRecords.map { record in
-                    (
-                        record.dayKey,
-                        record
-                    )
-                }
-        )
-
-
-        
-        let workoutsByDayKey = Dictionary(
-            grouping: workouts
-        ) { workout in
-            let workoutDayStart =
-                activityDayStart(
-                    containing:
-                        workout.startDate,
-                    calendar: calendar,
-                    startHour:
-                        settings
-                            .activityDayStartHour
-                )
-
-            return makeDayKey(
-                forActivityDayStarting:
-                    workoutDayStart,
-                calendar: calendar
+        var recordsByKey =
+            Dictionary(
+                uniqueKeysWithValues:
+                    existingRecords.map { record in
+                        (
+                            record.dayKey,
+                            record
+                        )
+                    }
             )
-        }
+
+        let workoutsByDayKey =
+            Dictionary(
+                grouping: workouts
+            ) { workout in
+                let workoutDayStart =
+                    activityDayStart(
+                        containing:
+                            workout.startDate,
+                        calendar: calendar,
+                        startHour:
+                            settings
+                                .activityDayStartHour
+                    )
+
+                return makeDayKey(
+                    forActivityDayStarting:
+                        workoutDayStart,
+                    calendar: calendar
+                )
+            }
 
         var dayStart = firstDayStart
 
         while dayStart < endExclusive {
-            let dayKey = makeDayKey(
-                forActivityDayStarting: dayStart,
-                calendar: calendar
-            )
+            let dayKey =
+                makeDayKey(
+                    forActivityDayStarting:
+                        dayStart,
+                    calendar: calendar
+                )
 
             let dailyWorkouts =
                 workoutsByDayKey[dayKey] ?? []
@@ -570,11 +577,11 @@ final class ActivityRepository {
                     total,
                     workout in
 
-                    total
-                        + (
-                            workout.moderateMinutes
-                            ?? 0
-                        )
+                    total +
+                    (
+                        workout.moderateMinutes
+                        ?? 0
+                    )
                 }
 
             let vigorousMinutes =
@@ -582,20 +589,34 @@ final class ActivityRepository {
                     total,
                     workout in
 
-                    total
-                        + (
-                            workout.vigorousMinutes
-                            ?? 0
-                        )
+                    total +
+                    (
+                        workout.vigorousMinutes
+                        ?? 0
+                    )
                 }
 
-
-            let unknownIntensityMinutes = 0.0
+            let unknownIntensityMinutes =
+                0.0
 
             let strengthWorkoutCount =
                 dailyWorkouts.filter {
                     $0.countsTowardStrength
                 }.count
+
+            let excludedAerobicWorkoutMinutes =
+                dailyWorkouts
+                    .filter {
+                        !$0.workoutRole
+                            .includesAerobic
+                    }
+                    .reduce(0) {
+                        total,
+                        workout in
+
+                        total +
+                        workout.durationMinutes
+                    }
 
             let previousRecord =
                 recordsByKey[dayKey]
@@ -606,10 +627,9 @@ final class ActivityRepository {
             let strengthCoverage:
                 DataCoverage = .confirmed
 
-
-            if let existing =
-                previousRecord {
-                existing.dayStart = dayStart
+            if let existing = previousRecord {
+                existing.dayStart =
+                    dayStart
 
                 existing.moderateMinutes =
                     moderateMinutes
@@ -622,6 +642,9 @@ final class ActivityRepository {
 
                 existing.strengthWorkoutCount =
                     strengthWorkoutCount
+
+                existing.excludedAerobicWorkoutMinutes =
+                    excludedAerobicWorkoutMinutes
 
                 existing.aerobicCoverageRawValue =
                     aerobicCoverage.rawValue
@@ -644,6 +667,8 @@ final class ActivityRepository {
                             unknownIntensityMinutes,
                         strengthWorkoutCount:
                             strengthWorkoutCount,
+                        excludedAerobicWorkoutMinutes:
+                            excludedAerobicWorkoutMinutes,
                         aerobicCoverage:
                             aerobicCoverage,
                         strengthCoverage:
@@ -653,7 +678,8 @@ final class ActivityRepository {
                     )
 
                 modelContext.insert(record)
-                recordsByKey[dayKey] = record
+                recordsByKey[dayKey] =
+                    record
             }
 
             guard let nextDayStart =
@@ -672,6 +698,7 @@ final class ActivityRepository {
 
         try modelContext.save()
     }
+    
     func loadDashboardInput(
         now: Date = .now
     ) throws -> DashboardInput {
@@ -714,13 +741,13 @@ final class ActivityRepository {
             let comparisonCurrentStart =
                 calendar.date(
                     byAdding: .day,
-                    value: -7,
+                    value: -30,
                     to: todayStart
                 ),
             let comparisonBaselineStart =
                 calendar.date(
                     byAdding: .day,
-                    value: -90,
+                    value: -60,
                     to: comparisonCurrentStart
                 )
         else {
@@ -1205,7 +1232,7 @@ final class ActivityRepository {
 
         return PersonalBaselineComparison(
             aerobic:
-                makeSevenDayTotalComparison(
+                makeWeeklyAverageComparison(
                     currentValues:
                         currentAerobic,
                     baselineValues:
@@ -1228,34 +1255,41 @@ final class ActivityRepository {
         )
     }
 
-    private func makeSevenDayTotalComparison(
+    private func makeWeeklyAverageComparison(
         currentValues: [Double],
         baselineValues: [Double]
     ) -> PersonalMetricComparison? {
-
-        guard currentValues.count == 7,
-              baselineValues.count >= 28
+        guard currentValues.count >= 21,
+              baselineValues.count >= 42
         else {
             return nil
         }
 
-        let currentTotal =
+        let currentDailyAverage =
             currentValues.reduce(0, +)
+            / Double(currentValues.count)
 
         let baselineDailyAverage =
             baselineValues.reduce(0, +)
             / Double(baselineValues.count)
 
-        let usualSevenDayTotal =
+        let currentWeeklyAverage =
+            currentDailyAverage * 7
+
+        let baselineWeeklyAverage =
             baselineDailyAverage * 7
 
         return PersonalMetricComparison(
-            currentValue: currentTotal,
-            usualValue: usualSevenDayTotal,
+            currentValue:
+                currentWeeklyAverage,
+            usualValue:
+                baselineWeeklyAverage,
             percentChange:
                 percentageChange(
-                    current: currentTotal,
-                    usual: usualSevenDayTotal
+                    current:
+                        currentWeeklyAverage,
+                    usual:
+                        baselineWeeklyAverage
                 )
         )
     }
@@ -1264,8 +1298,8 @@ final class ActivityRepository {
         currentValues: [Double],
         baselineValues: [Double]
     ) -> PersonalMetricComparison? {
-        guard currentValues.count == 7,
-              baselineValues.count >= 28
+        guard currentValues.count >= 21,
+              baselineValues.count >= 42
         else {
             return nil
         }

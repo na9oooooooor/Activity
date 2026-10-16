@@ -3,6 +3,11 @@ import SwiftData
 
 @main
 struct ActivityHealthApp: App {
+    @AppStorage(
+        AppAppearance.storageKey
+    )
+    private var appearanceRawValue =
+        AppAppearance.system.rawValue
     private let modelContainer:
         ModelContainer
 
@@ -48,18 +53,27 @@ struct ActivityHealthApp: App {
         }
         
     }
+    
+    private var resolvedColorScheme:
+        ColorScheme? {
+
+        if AppRuntime.isScreenshotMode {
+            return AppRuntime
+                .screenshotUsesDarkMode
+                ? .dark
+                : .light
+        }
+
+        return AppAppearance(
+            rawValue: appearanceRawValue
+        )?.colorScheme
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .preferredColorScheme(
-                    AppRuntime.isScreenshotMode
-                    ? (
-                        AppRuntime.screenshotUsesDarkMode
-                        ? .dark
-                        : .light
-                    )
-                    : nil
+                    resolvedColorScheme
                 )
         }
         .modelContainer(modelContainer)

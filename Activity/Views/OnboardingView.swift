@@ -12,8 +12,6 @@ struct OnboardingView: View {
 
     @State private var page = 0
 
-    @State private var selectedAgeBand:
-        ActivityAgeBand = .adult18To64
 
     @State private var isFinishing = false
 
@@ -30,32 +28,39 @@ struct OnboardingView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
 
-                ScrollView {
-                    Group {
-                        switch page {
-                        case 0:
-                            introductionPage
+                GeometryReader { geometry in
+                    ScrollView(.vertical) {
+                        Group {
+                            switch page {
+                            case 0:
+                                introductionPage
 
-                        case 1:
-                            rollingWeekPage
+                            case 1:
+                                rollingWeekPage
 
-                        case 2:
-                            agePage
-
-                        default:
-                            appleHealthPage
+                            default:
+                                appleHealthPage
+                            }
                         }
+                        .frame(
+                            width:
+                                max(
+                                    0,
+                                    geometry.size.width - 48
+                                ),
+                            alignment: .leading
+                        )
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 20)
                     }
-                    .frame(
-                        maxWidth: .infinity,
-                        alignment: .leading
+                    .id(page)
+                    .scrollIndicators(.hidden)
+                    .scrollBounceBehavior(
+                        .basedOnSize,
+                        axes: .vertical
                     )
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 20)
+                    .clipped()
                 }
-                .id(page)
-                .scrollIndicators(.hidden)
-
                 bottomNavigation
                     .padding(.horizontal, 24)
                     .padding(.top, 12)
@@ -73,7 +78,7 @@ struct OnboardingView: View {
         some View {
 
         HStack(spacing: 8) {
-            ForEach(0..<4, id: \.self) {
+            ForEach(0..<3, id: \.self) {
                 index in
 
                 Capsule()
@@ -188,7 +193,7 @@ struct OnboardingView: View {
             .foregroundStyle(.secondary)
 
             rollingWeekIllustration
-
+            guidanceSourceCard
             Text(
                 """
                 Older activity leaves naturally as a new day \
@@ -271,141 +276,99 @@ struct OnboardingView: View {
         )
     }
 
-    private var agePage: some View {
+    private var guidanceSourceCard: some View {
         VStack(
             alignment: .leading,
-            spacing: 20
+            spacing: 12
         ) {
-            HStack(
-                alignment: .top,
-                spacing: 16
-            ) {
-                VStack(
-                    alignment: .leading,
-                    spacing: 10
-                ) {
-                    Text("Which age group?")
-                        .font(.largeTitle.bold())
-
-                    Text(
-                        """
-                        We use this only to choose the appropriate \
-                        activity guidance. Your exact age is not needed.
-                        """
-                    )
-                    .foregroundStyle(.secondary)
-                    .fixedSize(
-                        horizontal: false,
-                        vertical: true
-                    )
-                }
-
-                Spacer(minLength: 0)
-
-                Image("pebble_enough")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(
-                        width: 92,
-                        height: 92
-                    )
-                    .accessibilityHidden(true)
-            }
-
-            VStack(spacing: 12) {
-                ForEach(
-                    ActivityAgeBand.allCases
-                ) { ageBand in
-                    ageButton(ageBand)
-                }
-            }
-
-            if !selectedAgeBand
-                .supportsCoreActivityGuidance {
-
-                Label {
-                    Text(
-                        """
-                        This version is designed for adults. \
-                        People under 18 need different activity guidance.
-                        """
-                    )
-                } icon: {
-                    Image(
-                        systemName:
-                            "exclamationmark.circle.fill"
-                    )
-                    .foregroundStyle(.orange)
-                }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .padding(16)
-                .background(
-                    Color.orange.opacity(0.10),
-                    in: RoundedRectangle(
-                        cornerRadius: 16,
-                        style: .continuous
-                    )
-                )
-            }
-        }
-    }
-
-    private func ageButton(
-        _ ageBand: ActivityAgeBand
-    ) -> some View {
-
-        Button {
-            selectedAgeBand = ageBand
-        } label: {
-            HStack(spacing: 16) {
-                VStack(
-                    alignment: .leading,
-                    spacing: 5
-                ) {
-                    Text(ageBand.title)
-                        .font(.headline)
-
-                    Text(ageBand.explanation)
-                        .font(.footnote)
-                        .foregroundStyle(
-                            .secondary
-                        )
-                        .multilineTextAlignment(
-                            .leading
-                        )
-                }
-
-                Spacer()
-
-                Image(
-                    systemName:
-                        selectedAgeBand == ageBand
-                            ? "checkmark.circle.fill"
-                            : "circle"
-                )
-                .font(.title3)
-                .foregroundStyle(
-                    selectedAgeBand == ageBand
-                        ? ActivityTheme.accent
-                        : Color.secondary
-                )
-            }
-            .padding(16)
-            .background(
-                selectedAgeBand == ageBand
-                    ? ActivityTheme.accent
-                        .opacity(0.10)
-                    : Color.secondary
-                        .opacity(0.06),
-                in: RoundedRectangle(
-                    cornerRadius: 18,
-                    style: .continuous
-                )
+            Label(
+                "Your starting targets",
+                systemImage: "checkmark.seal.fill"
             )
+            .font(.headline)
+            .foregroundStyle(ActivityTheme.accent)
+
+            HStack(spacing: 24) {
+                targetReference(
+                    value: "150",
+                    description: "aerobic minutes"
+                )
+
+                targetReference(
+                    value: "2",
+                    description: "strength days"
+                )
+            }
+
+            Text(
+                """
+                These starting targets follow World Health Organization \
+                guidance for adults. Enough measures them across your \
+                latest seven days.
+                """
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .fixedSize(
+                horizontal: false,
+                vertical: true
+            )
+
+            Text(
+                """
+                Both targets are adjustable later, so you can choose \
+                what is appropriate for you.
+                """
+            )
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .fixedSize(
+                horizontal: false,
+                vertical: true
+            )
+
+            Link(
+                "Read the WHO guidance",
+                destination: URL(
+                    string: "https://www.who.int/publications-detail-redirect/9789240015128"
+                )!
+            )
+            .font(.footnote.weight(.semibold))
         }
-        .buttonStyle(.plain)
+        .padding(16)
+        .frame(
+            maxWidth: .infinity,
+            alignment: .leading
+        )
+        .background(
+            ActivityTheme.surface,
+            in: RoundedRectangle(
+                cornerRadius: 18,
+                style: .continuous
+            )
+        )
     }
+    private func targetReference(
+        value: String,
+        description: String
+    ) -> some View {
+        VStack(
+            alignment: .leading,
+            spacing: 2
+        ) {
+            Text(value)
+                .font(.title.bold())
+
+            Text(description)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(
+            maxWidth: .infinity,
+            alignment: .leading
+        )
+    }
+
 
     private var appleHealthPage: some View {
         VStack(
@@ -547,7 +510,7 @@ struct OnboardingView: View {
     private var bottomButton:
         some View {
 
-            if page < 3 {
+            if page < 2 {
             Button {
                 withAnimation {
                     page += 1
@@ -560,11 +523,7 @@ struct OnboardingView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(
-                page == 2
-                    && !selectedAgeBand
-                        .supportsCoreActivityGuidance
-            )
+           
         } else {
             Button {
                 Task {
@@ -595,11 +554,7 @@ struct OnboardingView: View {
     }
 
     private func finishOnboarding() async {
-        guard selectedAgeBand
-            .supportsCoreActivityGuidance
-        else {
-            return
-        }
+
 
         isFinishing = true
         errorMessage = nil
@@ -620,7 +575,7 @@ struct OnboardingView: View {
             try repository
                 .completeOnboarding(
                     ageBand:
-                        selectedAgeBand
+                        .adult18To64
                 )
 
             onCompleted()

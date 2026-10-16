@@ -68,11 +68,6 @@
 			path = Scripts;
 			sourceTree = "<group>";
 		};
-		709CEBEC307321670043737D /* Controllers */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Controllers;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -96,7 +91,6 @@
 		7039561E30693EE100825B7D = {
 			isa = PBXGroup;
 			children = (
-				709CEBEC307321670043737D /* Controllers */,
 				709CEBEA30731D450043737D /* PrivacyInfo.xcprivacy */,
 				709CEBC5307314030043737D /* Scripts */,
 				7017B200306EC2A600B2A96F /* Enough.storekit */,
@@ -133,7 +127,6 @@
 			fileSystemSynchronizedGroups = (
 				7039562930693EE100825B7D /* Activity */,
 				709CEBC5307314030043737D /* Scripts */,
-				709CEBEC307321670043737D /* Controllers */,
 			);
 			name = Activity;
 			packageProductDependencies = (
@@ -284,7 +277,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.1;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nas.Activityapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -338,7 +331,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.1;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nas.Activityapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;

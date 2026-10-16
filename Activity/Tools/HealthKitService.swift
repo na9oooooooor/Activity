@@ -100,7 +100,9 @@ enum HealthKitAccessState: Equatable {
 @Observable
 final class HealthKitService {
     private let healthStore: HKHealthStore
-
+    @ObservationIgnored
+    private var workoutObserverQuery:
+        HKObserverQuery?
     private(set) var accessState: HealthKitAccessState
 
     init(
@@ -112,6 +114,54 @@ final class HealthKitService {
             self.accessState = .checking
         } else {
             self.accessState = .unavailable
+        }
+    }
+    
+    func startObservingWorkoutChanges(
+        onChange:
+            @escaping
+            @MainActor
+            @Sendable
+            () async -> Void
+    ) {
+        guard workoutObserverQuery == nil,
+              !AppRuntime.isScreenshotMode
+        else {
+            return
+        }
+
+        let workoutType =
+            HKObjectType.workoutType()
+
+        let query =
+            HKObserverQuery(
+                sampleType: workoutType,
+                predicate: nil
+            ) {
+                _,
+                completionHandler,
+                error in
+
+                guard error == nil else {
+                    completionHandler()
+                    return
+                }
+
+                Task { @MainActor in
+                    await onChange()
+                    completionHandler()
+                }
+            }
+
+        workoutObserverQuery = query
+        healthStore.execute(query)
+
+        healthStore.enableBackgroundDelivery(
+            for: workoutType,
+            frequency: .immediate
+        ) {
+            _,
+            _ in
         }
     }
     

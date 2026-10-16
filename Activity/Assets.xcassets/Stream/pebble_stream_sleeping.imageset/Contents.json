@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "pebble_stream_sleeping.svg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

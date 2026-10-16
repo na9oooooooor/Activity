@@ -4,7 +4,7 @@ struct ActivityRuleConfiguration: Equatable, Sendable {
     let aerobicTargetMinutes: Double
     let upperAerobicReferenceMinutes: Double
     let strengthTargetDays: Int
-
+    let inactivityPromptDays: Int
     let workoutPromptGapMinutes: Double
     let completedSessionThresholdMinutes: Double
     let movementComparisonRatio: Double
@@ -14,6 +14,7 @@ struct ActivityRuleConfiguration: Equatable, Sendable {
         aerobicTargetMinutes: Double,
         upperAerobicReferenceMinutes: Double,
         strengthTargetDays: Int,
+        inactivityPromptDays: Int = 3,
         workoutPromptGapMinutes: Double,
         completedSessionThresholdMinutes: Double,
         movementComparisonRatio: Double = 0.70,
@@ -27,7 +28,11 @@ struct ActivityRuleConfiguration: Equatable, Sendable {
 
         self.strengthTargetDays =
             strengthTargetDays
-
+        self.inactivityPromptDays =
+            max(
+                1,
+                inactivityPromptDays
+            )
         self.workoutPromptGapMinutes =
             workoutPromptGapMinutes
 
@@ -46,6 +51,7 @@ struct ActivityRuleConfiguration: Equatable, Sendable {
             aerobicTargetMinutes: 150,
             upperAerobicReferenceMinutes: 300,
             strengthTargetDays: 2,
+            inactivityPromptDays: 3,
             workoutPromptGapMinutes: 30,
             completedSessionThresholdMinutes: 20,
             movementComparisonRatio: 0.70,
@@ -65,6 +71,7 @@ extension ActivityRuleConfiguration {
                     .aerobicAdditionalRangeMinutes,
             strengthTargetDays:
                 targets.strengthMinimumDays,
+            inactivityPromptDays: 3,
             workoutPromptGapMinutes:
                 30,
             completedSessionThresholdMinutes:
@@ -78,7 +85,7 @@ extension ActivityRuleConfiguration {
 enum ActivityRules {
     static func assess(
         snapshot: ActivitySnapshot,
-        checkIn: TodayCheckIn,
+        checkIn _: TodayCheckIn,
         configuration: ActivityRuleConfiguration = .version1
     ) -> ActivityAssessment {
         let aerobicMinutes = snapshot.moderateEquivalentMinutes
@@ -110,15 +117,18 @@ enum ActivityRules {
             : .belowTargets
         }
         
-        let recommendation = makeTodayRecommendation(
-            snapshot: snapshot,
-            checkIn: checkIn,
-            targetsMet: targetsMet,
-            aerobicTargetMet: aerobicTargetMet,
-            strengthTargetMet: strengthTargetMet,
-            configuration: configuration
-        )
-        
+        let recommendation =
+            makeTodayRecommendation(
+                snapshot: snapshot,
+                targetsMet: targetsMet,
+                aerobicTargetMet:
+                    aerobicTargetMet,
+                strengthTargetMet:
+                    strengthTargetMet,
+                configuration:
+                    configuration
+            )
+
         return ActivityAssessment(
             status: status,
             recommendation: recommendation,
@@ -126,14 +136,14 @@ enum ActivityRules {
             strengthTargetMet: strengthTargetMet,
             aboveAerobicReferenceRange:
                 targetsMet
-            && aerobicMinutes
-            > configuration.upperAerobicReferenceMinutes
+                && aerobicMinutes
+                    > configuration
+                        .upperAerobicReferenceMinutes
         )
     }
     
     private static func makeTodayRecommendation(
         snapshot: ActivitySnapshot,
-        checkIn: TodayCheckIn,
         targetsMet: Bool,
         aerobicTargetMet: Bool,
         strengthTargetMet: Bool,
@@ -169,12 +179,6 @@ enum ActivityRules {
             break
         }
 
-        if checkIn.wantsRecovery {
-            return TodayRecommendation(
-                outcome: .recovery,
-                reason: .recoveryChoice
-            )
-        }
 
         if !strengthTargetMet
             && !snapshot
@@ -233,12 +237,6 @@ enum ActivityRules {
             )
         }
 
-        if checkIn.reportsLowMovement {
-            return TodayRecommendation(
-                outcome: .activityRecommended,
-                reason: .lowMovement
-            )
-        }
 
         let aerobicMinutesAfterExpiry =
             max(
@@ -293,7 +291,18 @@ enum ActivityRules {
                     .aerobicCoverageExpiringSoon
             )
         }
+        
+        if let daysSinceLastActivity =
+                snapshot.daysSinceLastTargetActivity,
+           daysSinceLastActivity >=
+                configuration.inactivityPromptDays {
 
+            return TodayRecommendation(
+                outcome: .activityRecommended,
+                reason: .movementBelowUsual
+            )
+        }
+        
         if let recentAverageSteps =
                 snapshot.recentAverageSteps,
            let usualAverageSteps =

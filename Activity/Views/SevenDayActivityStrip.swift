@@ -140,29 +140,35 @@ struct SevenDayActivityStrip: View {
     private var strengthMarkers: some View {
         HStack(spacing: 8) {
             ForEach(days) { day in
-                Circle()
-                    .fill(
-                        day.isStrengthDay
-                            ? tint
-                            : Color.clear
-                    )
-                    .overlay {
-                        Circle()
-                            .stroke(
-                                day.isStrengthDay
-                                    ? tint
-                                    : ActivityTheme
-                                        .divider,
-                                lineWidth: 1
+                Group {
+                    if day.isStrengthDay {
+                        Image(
+                            systemName: "dumbbell.fill"
+                        )
+                        .font(
+                            .system(
+                                size: 9,
+                                weight: .semibold
+                            )
+                        )
+                        .foregroundStyle(.white)
+                        .frame(
+                            width: 20,
+                            height: 20
+                        )
+                        .background(
+                            tint,
+                            in: Circle()
+                        )
+                    } else {
+                        Color.clear
+                            .frame(
+                                width: 20,
+                                height: 20
                             )
                     }
-                    .frame(
-                        width: 8,
-                        height: 8
-                    )
-                    .frame(
-                        maxWidth: .infinity
-                    )
+                }
+                .frame(maxWidth: .infinity)
             }
         }
         .accessibilityHidden(true)

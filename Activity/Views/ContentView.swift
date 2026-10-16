@@ -20,9 +20,13 @@ struct ContentView: View {
     @State private var showingTodayPaywall = false
     @State private var hasObservedInitialAssessment = false
     @State private var reviewRequestPending = false
-    
+    @State private var showingOfferCodeRedemption = false
     @Query private var savedSettings: [AppSettings]
-    
+    @AppStorage(
+        AppAppearance.storageKey
+    )
+    private var appearanceRawValue =
+        AppAppearance.system.rawValue
     @Environment(\.requestReview) private var requestReview
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -123,6 +127,7 @@ struct ContentView: View {
             }
 
             await prepareDashboard()
+            startWorkoutObservation()
             await updateSmartReminder()
             if AppRuntime.isScreenshotMode,
                AppRuntime.screenshotScenario == .paywall {
@@ -170,6 +175,7 @@ struct ContentView: View {
                     .refreshEntitlements()
 
                 await prepareDashboard()
+                startWorkoutObservation()
             }
         }
         .sheet(
@@ -203,6 +209,7 @@ struct ContentView: View {
             ) {
                 Task {
                     await prepareDashboard()
+                    startWorkoutObservation()
                 }
             }
         }
@@ -416,55 +423,6 @@ struct ContentView: View {
 
     // MARK: - Today
 
-    private func todaySection(
-        assessment: ActivityAssessment
-    ) -> some View {
-        Section("Today") {
-            Text(
-                assessment
-                    .recommendation
-                    .outcome?
-                    .rawValue
-                ?? "Recommendation unavailable"
-            )
-            .font(.headline)
-
-            Text(
-                reasonText(
-                    for: assessment
-                )
-            )
-            .foregroundStyle(.secondary)
-
-            Picker(
-                "Today’s context",
-                selection: Binding(
-                    get: {
-                        dashboard.todayContext
-                    },
-                    set: { selection in
-                        dashboard
-                            .updateTodayContext(
-                                selection,
-                                modelContext:
-                                    modelContext
-                            )
-                    }
-                )
-            ) {
-                ForEach(
-                    TodayContextSelection
-                        .allCases
-                ) { selection in
-                    Text(selection.title)
-                        .tag(selection)
-                }
-            }
-            .pickerStyle(.segmented)
-
-  
-        }
-    }
     
     @MainActor
     private func considerReviewPrompt()
@@ -689,8 +647,6 @@ struct ContentView: View {
                     TodayDashboardView(
                         input: input,
                         assessment: assessment,
-                        todayContext:
-                            dashboard.todayContext,
                         hasPlusAccess:
                             purchases.hasPlusAccess,
                         recommendationReason:
@@ -708,16 +664,8 @@ struct ContentView: View {
                         },
                         onRefresh: {
                             await refreshDashboard()
-                        },
-                        onContextChange: {
-                            selection in
-
-                            dashboard.updateTodayContext(
-                                selection,
-                                modelContext:
-                                    modelContext
-                            )
                         }
+        
                     )
                 } else if let errorMessage =
                             dashboard.state.errorMessage {
@@ -782,6 +730,56 @@ struct ContentView: View {
         || purchases.purchasedProductIDs.contains(
             EnoughProductID.monthly.rawValue
         )
+    }
+    private func startWorkoutObservation() {
+        guard healthKit.accessState
+            == .requestFinished
+        else {
+            return
+        }
+
+        healthKit.startObservingWorkoutChanges {
+            await processObservedWorkoutChange()
+        }
+    }
+
+    private func processObservedWorkoutChange()
+        async {
+
+        guard healthKit.accessState
+            == .requestFinished
+        else {
+            return
+        }
+
+        do {
+            let repository =
+                ActivityRepository(
+                    modelContext:
+                        modelContext
+                )
+
+            let result =
+                try await healthKit
+                    .importHealthData(
+                        using: repository
+                    )
+
+            dashboard.loadStoredData(
+                modelContext:
+                    modelContext
+            )
+
+            await updateSmartReminder()
+
+            await WorkoutNotificationService()
+                .notifyAboutNewWorkouts(
+                    count:
+                        result.insertedCount
+                )
+        } catch {
+            // A normal foreground refresh can try again.
+        }
     }
     
     private func initialLoadFailureView(
@@ -962,7 +960,14 @@ struct ContentView: View {
                             }
                         }
                     }
-
+                    Button {
+                        showingOfferCodeRedemption = true
+                    } label: {
+                        Label(
+                            "Redeem Offer Code",
+                            systemImage: "ticket"
+                        )
+                    }
                     Button {
                         Task {
                             await purchases
@@ -990,8 +995,8 @@ struct ContentView: View {
                 } footer: {
                     Text(
                         """
-                        Today recommendations and your 7-day progress \
-                        remain free.
+                        Today, your 7-day progress, workout classifications, \
+                        reminders, and appearance options remain free.
                         """
                     )
                 }
@@ -1016,12 +1021,7 @@ struct ContentView: View {
 
                 Section("Activity") {
                     NavigationLink {
-                        GuidanceSettingsView {
-                            dashboard.loadStoredData(
-                                modelContext:
-                                    modelContext
-                            )
-                        }
+                        GuidanceSettingsView()
                     } label: {
                         Label(
                             "Guidance",
@@ -1098,7 +1098,31 @@ struct ContentView: View {
                     }
 
                 }
-
+                
+                Section {
+                    Picker(
+                        "Appearance",
+                        selection:
+                            $appearanceRawValue
+                    ) {
+                        ForEach(
+                            AppAppearance.allCases
+                        ) { appearance in
+                            Text(appearance.title)
+                                .tag(appearance.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Appearance")
+                } footer: {
+                    Text(
+                        """
+                        System follows your device appearance. \
+                        Light and Dark remain selected until you change them.
+                        """
+                    )
+                }
                 Section("About") {
                     NavigationLink {
                         HowEnoughWorksView()
@@ -1111,7 +1135,7 @@ struct ContentView: View {
 
                     LabeledContent(
                         "Guidance version",
-                        value: "1.0"
+                        value: "1.1"
                     )
                 }
             }
@@ -1139,6 +1163,14 @@ struct ContentView: View {
                 .presentationDragIndicator(
                     .visible
                 )
+            }
+        }.offerCodeRedemption(
+            isPresented:
+                $showingOfferCodeRedemption
+        ) { _ in
+            Task {
+                await purchases
+                    .refreshEntitlements()
             }
         }
     }
@@ -1175,9 +1207,7 @@ struct ContentView: View {
                 snapshot
                     .strengthDaysExpiringSoon
             ),
-            String(
-                input.checkIn.wantsRecovery
-            )
+        
         ]
         .joined(separator: "|")
     }
@@ -1267,6 +1297,7 @@ struct ContentView: View {
         }
 
         await refreshDashboard()
+        startWorkoutObservation()
     }
 
     private func refreshDashboard() async {
