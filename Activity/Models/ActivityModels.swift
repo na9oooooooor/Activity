@@ -164,7 +164,6 @@ struct ActivitySnapshot: Equatable, Sendable {
 
     var moderateEquivalentMinutes: Double {
         moderateMinutes
-            + supplementalAppleExerciseMinutes
             + (2 * vigorousMinutes)
     }
 }

@@ -60,13 +60,12 @@ struct HowEnoughWorksView: View {
                 )
 
                 explanationRow(
-                    systemImage: "apple.logo",
-                    title: "Apple Exercise",
+                    systemImage: "checkmark.circle",
+                    title: "What counts",
                     text:
                         """
-                        Accessible Apple Exercise minutes can fill \
-                        gaps not already represented by classified \
-                        workouts.
+                        Only workouts classified as Aerobic or Both add \
+                        minutes toward your aerobic target.
                         """
                 )
             }

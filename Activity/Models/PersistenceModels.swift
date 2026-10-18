@@ -282,7 +282,6 @@ final class DailyActivityRecord {
 
     var guidelineModerateEquivalentMinutes: Double {
         moderateEquivalentMinutes
-            + supplementalAppleExerciseMinutes
     }
 
     var isStrengthDay: Bool {

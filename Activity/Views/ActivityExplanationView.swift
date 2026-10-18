@@ -142,9 +142,8 @@ struct ActivityExplanationView: View {
             Text(
                 """
                 Moderate-equivalent minutes = classified moderate \
-                + other Apple Exercise + 2 × vigorous minutes. \
-                Activity already represented by classified workouts \
-                is removed from Apple Exercise before calculation.
+                + 2 × vigorous minutes. Only workouts classified \
+                as Aerobic or Both contribute to your aerobic target.
                 """
             )
             .font(.footnote)
