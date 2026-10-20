@@ -142,20 +142,26 @@ enum AutomaticIntensityClassifier {
             return .unavailable
         }
 
-        if averageMETs < 3 {
+        if averageMETs >= 6 {
             return AutomaticIntensityResult(
                 moderateMinutes: 0,
+                vigorousMinutes: durationMinutes,
+                sourceRawValue: "averageMETs"
+            )
+        }
+
+        if averageMETs >= 3 {
+            return AutomaticIntensityResult(
+                moderateMinutes: durationMinutes,
                 vigorousMinutes: 0,
                 sourceRawValue: "averageMETs"
             )
         }
 
-
         return AutomaticIntensityResult(
-            moderateMinutes: durationMinutes,
+            moderateMinutes: 0,
             vigorousMinutes: 0,
-            sourceRawValue:
-                "averageMETsConservative"
+            sourceRawValue: "averageMETs"
         )
     }
 }

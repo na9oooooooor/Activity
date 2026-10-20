@@ -374,6 +374,10 @@ final class ActivityRepository {
                     && existing.workoutRoleSource
                         == .manualEntry
 
+                let keepUserIntensityOverride =
+                    existing.intensitySourceRawValue
+                        == "userReviewed"
+
                 if !keepOlderLocalManualEntry {
                     existing.workoutRole =
                         effectiveRole
@@ -381,17 +385,21 @@ final class ActivityRepository {
                     existing.workoutRoleSource =
                         effectiveRoleSource
 
-                    existing.moderateMinutes =
-                        effectiveIntensity
-                            .moderateMinutes
+                    if !effectiveRole.includesAerobic {
+                        existing.moderateMinutes = nil
+                        existing.vigorousMinutes = nil
+                        existing.intensitySourceRawValue =
+                            "notApplicable"
+                    } else if !keepUserIntensityOverride {
+                        existing.moderateMinutes =
+                            effectiveIntensity.moderateMinutes
 
-                    existing.vigorousMinutes =
-                        effectiveIntensity
-                            .vigorousMinutes
+                        existing.vigorousMinutes =
+                            effectiveIntensity.vigorousMinutes
 
-                    existing.intensitySourceRawValue =
-                        effectiveIntensity
-                            .sourceRawValue
+                        existing.intensitySourceRawValue =
+                            effectiveIntensity.sourceRawValue
+                    }
                 }
 
                 updatedCount += 1
@@ -443,6 +451,63 @@ final class ActivityRepository {
         return WorkoutImportResult(
             insertedCount: insertedCount,
             updatedCount: updatedCount
+        )
+    }
+    
+    func setWorkoutIntensityOverride(
+        _ workout: StoredWorkout,
+        intensity: WorkoutIntensityChoice,
+        mixedVigorousMinutes: Double? = nil,
+        calculatedAt: Date = .now
+    ) throws {
+        guard workout.workoutRole.includesAerobic
+        else {
+            return
+        }
+
+        let duration =
+            max(0, workout.durationMinutes)
+
+        switch intensity {
+        case .light:
+            workout.moderateMinutes = 0
+            workout.vigorousMinutes = 0
+
+        case .moderate:
+            workout.moderateMinutes = duration
+            workout.vigorousMinutes = 0
+
+        case .vigorous:
+            workout.moderateMinutes = 0
+            workout.vigorousMinutes = duration
+
+        case .mixed:
+            let vigorous =
+                min(
+                    duration,
+                    max(
+                        0,
+                        mixedVigorousMinutes
+                            ?? duration / 2
+                    )
+                )
+
+            workout.moderateMinutes =
+                duration - vigorous
+
+            workout.vigorousMinutes =
+                vigorous
+        }
+
+        workout.intensitySourceRawValue =
+            "userReviewed"
+
+        try modelContext.save()
+
+        try rebuildDailyActivityRecords(
+            from: workout.startDate,
+            through: workout.endDate,
+            calculatedAt: calculatedAt
         )
     }
     
